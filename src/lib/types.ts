@@ -1,6 +1,6 @@
 export type TransactionStatus = "pending" | "completed" | "cancelled" | "refunded";
 
-export type PromotionStatus = "active" | "expired" | "unavailable";
+export type PromotionStatus = "active" | "expired" | "unavailable" | "inactive";
 
 export interface KpiPoint {
   date: string;
@@ -23,7 +23,8 @@ export interface Product {
 export interface AffiliateLink {
   id: string;
   label: string;
-  targetType: "Storewide" | "Product";
+  /** Every link is storewide — there is no per-product link type. */
+  targetType: "Storewide";
   target: string;
   url: string;
   /** Typeable substitute for the URL — same tracking and commission as the link. */
@@ -35,10 +36,8 @@ export interface AffiliateLink {
   createdAt: string;
   status: PromotionStatus;
   markupPercent?: number;
-  /** Product-specific links let the affiliate set their own resale price. */
-  basePrice?: number;
-  sellingPrice?: number;
-  earningPerSale?: number;
+  /** Currency of this link's earnings, as the store reported them. */
+  currency?: string | null;
 }
 
 export interface Transaction {
@@ -75,7 +74,7 @@ export interface SupportTicket {
   relatedTo?: string;
 }
 
-export type AffiliateAccountStatus = "active" | "suspended" | "pending" | "rejected";
+export type AffiliateAccountStatus = "active" | "approved" | "suspended" | "pending" | "rejected";
 
 export interface AffiliateApplication {
   channel: "Instagram" | "TikTok" | "YouTube" | "Blog / Website" | "WhatsApp Community" | "Twitter/X";

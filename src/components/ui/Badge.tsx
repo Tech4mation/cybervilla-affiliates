@@ -28,6 +28,12 @@ const statusTone: Record<string, Tone> = {
   cancelled: "danger",
   refunded: "danger",
   failed: "danger",
+  // States the backend genuinely emits. Without these, a reversed (refunded)
+  // earning was styled the same as an expired promotion.
+  reversed: "danger",
+  suspended: "danger",
+  payable: "info",
+  inactive: "neutral",
 };
 
 export function Badge({

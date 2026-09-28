@@ -179,8 +179,10 @@ export default function ProductsPage() {
                   <p className="text-base font-semibold text-foreground">
                     {formatCurrency(product.price, product.currency)}
                   </p>
+                  {/* Links are storewide, so this points at the links page
+                      rather than carrying a product that nothing would use. */}
                   <Link
-                    href={{ pathname: "/links", query: { product: product.id } }}
+                    href="/links"
                     className="inline-flex items-center gap-1.5 rounded-lg bg-accent px-3 py-2 text-xs font-semibold text-black hover:bg-accent-strong"
                   >
                     <Link2 size={13} /> Get Link

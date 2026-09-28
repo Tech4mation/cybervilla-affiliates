@@ -1,15 +1,29 @@
 "use client";
 
-import { usePathname } from "next/navigation";
-import { Menu, ShieldCheck } from "lucide-react";
+import { useEffect, useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { LogOut, Menu, ShieldCheck } from "lucide-react";
 import { ADMIN_NAV_ITEMS } from "@/lib/admin-nav";
-import { ADMIN_USER } from "@/lib/admin-data";
+import { getCurrentUser, signoutUser } from "@/lib/api";
 
 export function AdminTopbar({ onMenuClick }: { onMenuClick: () => void }) {
   const pathname = usePathname();
+  const router = useRouter();
+  const [user, setUser] = useState<{ name: string; email: string; role: string } | null>(null);
   const current = [...ADMIN_NAV_ITEMS]
     .sort((a, b) => b.href.length - a.href.length)
     .find((item) => pathname === item.href || pathname.startsWith(`${item.href}/`));
+
+  useEffect(() => {
+    getCurrentUser()
+      .then(({ user }) => setUser({ name: user.name, email: user.email, role: user.role }))
+      .catch(() => undefined);
+  }, []);
+
+  async function handleLogout() {
+    await signoutUser().catch(() => undefined);
+    router.replace("/signin");
+  }
 
   return (
     <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-border bg-background/80 px-4 backdrop-blur sm:px-6">
@@ -28,13 +42,26 @@ export function AdminTopbar({ onMenuClick }: { onMenuClick: () => void }) {
       </div>
 
       <div className="flex items-center gap-3">
-        <span className="flex h-7 w-7 items-center justify-center rounded-full bg-brand-gradient text-xs font-semibold text-white">
-          {ADMIN_USER.name.split(" ").map((n) => n[0]).join("")}
-        </span>
-        <div className="hidden sm:block">
-          <p className="text-sm font-medium leading-tight text-foreground">{ADMIN_USER.name}</p>
-          <p className="text-[11px] leading-tight text-muted">{ADMIN_USER.role}</p>
-        </div>
+        {user && (
+          <>
+            <span className="flex h-7 w-7 items-center justify-center rounded-full bg-brand-gradient text-xs font-semibold text-white">
+              {user.name.split(" ").map((n) => n[0]).join("")}
+            </span>
+            <div className="hidden sm:block">
+              <p className="text-sm font-medium leading-tight text-foreground">{user.name}</p>
+              <p className="text-[11px] leading-tight text-muted">{user.role}</p>
+            </div>
+          </>
+        )}
+        <button
+          onClick={handleLogout}
+          className="inline-flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-2 text-xs font-medium text-muted hover:bg-surface-2 hover:text-foreground"
+          aria-label="Log out"
+          title="Log out"
+        >
+          <LogOut size={15} />
+          <span className="hidden sm:inline">Log out</span>
+        </button>
       </div>
     </header>
   );

@@ -57,6 +57,43 @@ export function timeAgo(dateStr: string) {
   return formatDate(dateStr);
 }
 
+/**
+ * Put text on the clipboard, reporting honestly whether it worked.
+ *
+ * `navigator.clipboard` exists only in a secure context, so on a plain-http
+ * deployment it is undefined and the modern call throws. The old
+ * `execCommand` path still works there, and if both fail the caller is told,
+ * rather than showing a "Copied" tick over an untouched clipboard.
+ */
+export async function copyToClipboard(text: string): Promise<boolean> {
+  try {
+    if (typeof navigator !== "undefined" && navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+  } catch {
+    // Fall through and try the legacy path.
+  }
+
+  try {
+    const area = document.createElement("textarea");
+    area.value = text;
+    area.setAttribute("readonly", "");
+    // Off-screen but still focusable; `display: none` cannot be selected.
+    area.style.position = "fixed";
+    area.style.top = "-1000px";
+    area.style.opacity = "0";
+    document.body.appendChild(area);
+    area.select();
+    area.setSelectionRange(0, text.length);
+    const ok = document.execCommand("copy");
+    document.body.removeChild(area);
+    return ok;
+  } catch {
+    return false;
+  }
+}
+
 export function toCsv<T extends Record<string, unknown>>(rows: T[]): string {
   if (rows.length === 0) return "";
   const headers = Object.keys(rows[0]);

@@ -1,129 +1,74 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Card, CardHeader } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
-import { AFFILIATE } from "@/lib/mock-data";
-import { cn, formatDate } from "@/lib/utils";
-
-const TOGGLES = [
-  { key: "earning", label: "Earnings milestones" },
-  { key: "transaction", label: "Transaction status changes" },
-  { key: "payout", label: "Payout processing & completion" },
-  { key: "promotion", label: "Promotions & catalogue changes" },
-];
+import { getCurrentUser, type AuthUser } from "@/lib/api";
+import { formatDate } from "@/lib/utils";
 
 export default function SettingsPage() {
-  const [prefs, setPrefs] = useState<Record<string, boolean>>({
-    earning: true,
-    transaction: true,
-    payout: true,
-    promotion: false,
-  });
-  const [saved, setSaved] = useState(false);
+  const [user, setUser] = useState<AuthUser | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  function save(e: React.FormEvent) {
-    e.preventDefault();
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
-  }
+  useEffect(() => {
+    void getCurrentUser()
+      .then(({ user: currentUser }) => setUser(currentUser))
+      .catch((reason) => setError(reason instanceof Error ? reason.message : "Could not load your account."))
+      .finally(() => setLoading(false));
+  }, []);
+
+  if (loading) return <p className="text-sm text-muted">Loading account settings...</p>;
+  if (error || !user) return <p className="rounded-lg border border-danger/30 bg-danger/10 p-3 text-sm text-danger">{error ?? "Account details are unavailable."}</p>;
+
+  const initials = user.name.split(" ").map((part) => part[0]).join("");
 
   return (
     <div className="space-y-5">
       <Card>
-        <CardHeader title="Profile" subtitle="Your affiliate identity on CyberVilla." />
+        <CardHeader title="Profile" subtitle="Your account information from the affiliate backend." />
         <div className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:p-5">
-          <span className="flex h-16 w-16 items-center justify-center rounded-full bg-brand-gradient text-xl font-semibold text-white">
-            {AFFILIATE.name.split(" ").map((n) => n[0]).join("")}
-          </span>
+          <span className="flex h-16 w-16 items-center justify-center rounded-full bg-brand-gradient text-xl font-semibold text-white">{initials}</span>
           <div>
-            <p className="text-base font-semibold text-foreground">{AFFILIATE.name}</p>
-            <p className="text-sm text-muted">{AFFILIATE.email}</p>
+            <p className="text-base font-semibold text-foreground">{user.name}</p>
+            <p className="text-sm text-muted">{user.email}</p>
             <div className="mt-2 flex flex-wrap items-center gap-2">
-              <Badge tone="accent">{AFFILIATE.tier}</Badge>
-              <span className="text-xs text-muted">Affiliate ID: {AFFILIATE.id}</span>
-              <span className="text-xs text-muted">Joined {formatDate(AFFILIATE.joinedAt)}</span>
+              <Badge status={user.status}>{user.status}</Badge>
+              {user.affiliateId && <span className="text-xs text-muted">Affiliate ID: {user.affiliateId}</span>}
+              {user.createdAt && <span className="text-xs text-muted">Joined {formatDate(user.createdAt)}</span>}
             </div>
           </div>
         </div>
       </Card>
 
-      <form onSubmit={save} className="space-y-5">
-        <Card>
-          <CardHeader title="Personal information" />
-          <div className="grid gap-3 p-4 sm:grid-cols-2 sm:p-5">
-            <Field label="Full name" defaultValue={AFFILIATE.name} />
-            <Field label="Email address" defaultValue={AFFILIATE.email} type="email" />
-            <Field label="Phone number" placeholder="+234 800 000 0000" />
-            <Field label="Country" defaultValue="Nigeria" />
-          </div>
-        </Card>
-
-        <Card>
-          <CardHeader title="Security" />
-          <div className="grid gap-3 p-4 sm:grid-cols-2 sm:p-5">
-            <Field label="New password" type="password" placeholder="••••••••" />
-            <Field label="Confirm new password" type="password" placeholder="••••••••" />
-          </div>
-        </Card>
-
-        <Card>
-          <CardHeader title="Notification preferences" subtitle="Choose what you want to be notified about." />
-          <div className="divide-y divide-border">
-            {TOGGLES.map((t) => (
-              <label key={t.key} className="flex items-center justify-between gap-4 p-4 text-sm text-foreground sm:px-5">
-                {t.label}
-                <button
-                  type="button"
-                  onClick={() => setPrefs((p) => ({ ...p, [t.key]: !p[t.key] }))}
-                  className={cn(
-                    "relative h-6 w-11 shrink-0 rounded-full transition-colors",
-                    prefs[t.key] ? "bg-accent" : "bg-surface-2"
-                  )}
-                >
-                  <span
-                    className={cn(
-                      "absolute top-0.5 h-5 w-5 rounded-full bg-black transition-transform",
-                      prefs[t.key] ? "translate-x-5" : "translate-x-0.5"
-                    )}
-                  />
-                </button>
-              </label>
-            ))}
-          </div>
-        </Card>
-
-        <div className="flex items-center gap-3">
-          <button className="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-black hover:bg-accent-strong">
-            Save changes
-          </button>
-          {saved && <span className="text-xs font-medium text-success">Saved.</span>}
+      <Card>
+        <CardHeader title="Personal information" subtitle="These values are currently read-only because the backend has no profile update endpoint." />
+        <div className="grid gap-3 p-4 sm:grid-cols-2 sm:p-5">
+          <ReadOnlyField label="Full name" value={user.name} />
+          <ReadOnlyField label="Email address" value={user.email} />
+          <ReadOnlyField label="Phone number" value={user.phone || "Not provided"} />
+          <ReadOnlyField label="Account role" value={user.role} />
+          <ReadOnlyField label="Membership status" value={user.status} />
+          <ReadOnlyField label="Promotional channel" value={user.promotionalChannel || "Not provided"} />
         </div>
-      </form>
+      </Card>
+
+      <Card>
+        <CardHeader title="Account capabilities" subtitle="Only backend-supported account actions are shown." />
+        <div className="space-y-2 p-4 text-sm text-muted sm:p-5">
+          <p>Password changes are not available because the backend does not expose a password-update endpoint.</p>
+          <p>Notification preferences are not available because the backend does not persist notification settings.</p>
+        </div>
+      </Card>
     </div>
   );
 }
 
-function Field({
-  label,
-  placeholder,
-  defaultValue,
-  type = "text",
-}: {
-  label: string;
-  placeholder?: string;
-  defaultValue?: string;
-  type?: string;
-}) {
+function ReadOnlyField({ label, value }: { label: string; value: string }) {
   return (
-    <label className="block space-y-1">
+    <div className="space-y-1">
       <span className="text-xs font-medium text-muted">{label}</span>
-      <input
-        type={type}
-        defaultValue={defaultValue}
-        placeholder={placeholder}
-        className="w-full rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm text-foreground placeholder:text-muted focus:border-accent focus:outline-none"
-      />
-    </label>
+      <div className="rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm text-foreground">{value}</div>
+    </div>
   );
 }

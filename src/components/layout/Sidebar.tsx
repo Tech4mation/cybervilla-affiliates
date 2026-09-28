@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { NAV_ITEMS } from "@/lib/nav";
 import { cn } from "@/lib/utils";
-import { ShieldCheck, X } from "lucide-react";
+import { X } from "lucide-react";
 
 export function Sidebar({
   open,
@@ -75,16 +75,6 @@ export function Sidebar({
             );
           })}
         </nav>
-
-        <div className="border-t border-border p-3">
-          <Link
-            href="/admin"
-            className="flex items-center gap-2 rounded-lg px-3 py-2.5 text-sm font-medium text-muted transition-colors hover:bg-surface-2 hover:text-foreground"
-          >
-            <ShieldCheck size={16} />
-            Admin console
-          </Link>
-        </div>
 
         <div className="border-t border-border p-4">
           <div className="rounded-lg bg-surface-2 p-3">

@@ -1,70 +1,128 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { Check, Info } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Info, Loader2 } from "lucide-react";
 import { Card, CardHeader } from "@/components/ui/Card";
-import { Badge } from "@/components/ui/Badge";
 import { SearchInput, Select } from "@/components/ui/Toolbar";
-import { PRODUCTS as SEED_PRODUCTS } from "@/lib/mock-data";
-import type { Product } from "@/lib/types";
-import { cn, formatCurrency } from "@/lib/utils";
+import { Pagination } from "@/components/ui/Pagination";
+import { fetchCategories, fetchProducts, type ApiCategory, type ApiProduct } from "@/lib/api";
+import { formatCurrency } from "@/lib/utils";
 
-const CATEGORIES = ["All Categories", ...Array.from(new Set(SEED_PRODUCTS.map((p) => p.category)))];
+const ALL = "All Categories";
+const PER_PAGE = 24;
 
 export default function AdminProductsPage() {
-  const [products, setProducts] = useState<Product[]>(SEED_PRODUCTS);
-  const [drafts, setDrafts] = useState<Record<string, string>>({});
-  const [saved, setSaved] = useState<string | null>(null);
+  const [products, setProducts] = useState<ApiProduct[]>([]);
+  const [total, setTotal] = useState(0);
+  const [categories, setCategories] = useState<ApiCategory[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [loadedOnce, setLoadedOnce] = useState(false);
+
   const [query, setQuery] = useState("");
-  const [category, setCategory] = useState("All Categories");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
+  const [categoryName, setCategoryName] = useState(ALL);
+  const [page, setPage] = useState(1);
 
-  const filtered = useMemo(() => {
-    return products.filter((p) => {
-      const matchesQuery = p.name.toLowerCase().includes(query.toLowerCase());
-      const matchesCategory = category === "All Categories" || p.category === category;
-      return matchesQuery && matchesCategory;
-    });
-  }, [products, query, category]);
+  // What the rows on screen actually correspond to. Comparing this against the
+  // current filters tells us a fetch is in flight without setting state inside
+  // an effect, which would cause a cascading render.
+  const [shown, setShown] = useState({ search: "", categoryName: ALL, page: 1 });
+  const refreshing =
+    shown.search !== debouncedQuery || shown.categoryName !== categoryName || shown.page !== page;
 
-  function rateFor(p: Product) {
-    return drafts[p.id] ?? String(p.commissionRate);
+  const categoryId = categories.find((c) => c.name === categoryName)?.id ?? null;
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedQuery(query.trim()), 300);
+    return () => clearTimeout(timer);
+  }, [query]);
+
+  useEffect(() => {
+    fetchCategories()
+      .then(({ categories }) => setCategories(categories))
+      .catch(() => undefined); // The filter is a convenience; the list still works without it.
+  }, []);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    // The search runs against the whole catalogue in the database, not just
+    // the rows already on screen.
+    fetchProducts({ search: debouncedQuery, categoryId, page, perPage: PER_PAGE }, controller.signal)
+      .then((res) => {
+        setProducts(res.products);
+        setTotal(res.total);
+        setError(null);
+        setShown({ search: debouncedQuery, categoryName, page });
+      })
+      .catch((reason) => {
+        if (reason instanceof DOMException && reason.name === "AbortError") return;
+        setError(reason instanceof Error ? reason.message : "Could not load the catalogue.");
+        setProducts([]);
+        setTotal(0);
+        // Mark the attempt as settled too, or the spinner spins forever.
+        setShown({ search: debouncedQuery, categoryName, page });
+      })
+      .finally(() => setLoadedOnce(true));
+    return () => controller.abort();
+  }, [debouncedQuery, categoryId, categoryName, page]);
+
+  function changeSearch(value: string) {
+    setQuery(value);
+    setPage(1);
   }
 
-  function saveRate(id: string) {
-    const value = Number(drafts[id]);
-    if (Number.isNaN(value) || value < 0 || value > 100) return;
-    setProducts((prev) => prev.map((p) => (p.id === id ? { ...p, commissionRate: value } : p)));
-    setSaved(id);
-    setTimeout(() => setSaved((s) => (s === id ? null : s)), 1500);
+  function changeCategory(value: string) {
+    setCategoryName(value);
+    setPage(1);
   }
 
-  function toggleEligible(id: string) {
-    setProducts((prev) =>
-      prev.map((p) =>
-        p.id === id
-          ? { ...p, eligible: !p.eligible, status: !p.eligible ? "active" : "unavailable" }
-          : p
-      )
-    );
-  }
+  const pageCount = Math.max(1, Math.ceil(total / PER_PAGE));
+  const filtering = debouncedQuery !== "" || categoryName !== ALL;
 
   return (
     <div className="space-y-5">
-      <p className="text-sm text-muted">Set the commission rate affiliates earn per product, and control eligibility.</p>
+      <p className="text-sm text-muted">Products shown here are read from the backend catalogue.</p>
       <div className="flex items-start gap-2 rounded-lg border border-border bg-surface-2 p-3 text-xs text-muted">
         <Info size={14} className="mt-0.5 shrink-0 text-accent" />
-        Product name, price, and category are synced from Odoo, CyberVilla&apos;s catalog system, and can&apos;t be
-        edited here. Commission rate and affiliate eligibility are program-specific overlays managed on this page.
+        Product name, price, category, availability, and images are supplied by the backend catalogue. Commission
+        rules are not available from the backend yet, so this page does not invent or edit them.
       </div>
 
+      {error && (
+        <div className="rounded-lg border border-danger/30 bg-danger/10 p-3 text-sm text-danger">
+          {error} — the catalogue could not be read, so nothing is listed below.
+        </div>
+      )}
+
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-        <SearchInput value={query} onChange={setQuery} placeholder="Search products…" className="sm:max-w-xs" />
-        <Select value={category} onChange={setCategory} options={CATEGORIES} />
-        <span className="text-xs text-muted sm:ml-auto">{filtered.length} products</span>
+        <SearchInput
+          value={query}
+          onChange={changeSearch}
+          placeholder="Search the whole catalogue…"
+          className="sm:max-w-xs"
+        />
+        <Select
+          value={categoryName}
+          onChange={changeCategory}
+          options={[ALL, ...categories.map((c) => c.name)]}
+        />
+        <span className="inline-flex items-center gap-1.5 text-xs text-muted sm:ml-auto">
+          {refreshing && <Loader2 size={12} className="animate-spin" />}
+          {loadedOnce ? `${total} ${filtering ? "matching" : "in catalogue"}` : "Loading…"}
+        </span>
       </div>
 
       <Card>
-        <CardHeader title="Commission rules" subtitle={`${products.length} products in catalog`} />
+        <CardHeader
+          title="Catalogue"
+          subtitle={
+            !loadedOnce
+              ? "Loading the catalogue…"
+              : filtering
+                ? `${total} product${total === 1 ? "" : "s"} match across the whole catalogue`
+                : `${total} products in the backend catalogue`
+          }
+        />
         <div className="overflow-x-auto">
           <table className="w-full min-w-[860px] text-sm">
             <thead>
@@ -72,74 +130,39 @@ export default function AdminProductsPage() {
                 <th className="px-4 py-3 font-medium sm:px-5">Product</th>
                 <th className="px-4 py-3 font-medium">Category</th>
                 <th className="px-4 py-3 font-medium">Price</th>
-                <th className="px-4 py-3 font-medium">Commission rate</th>
-                <th className="px-4 py-3 font-medium">Status</th>
-                <th className="px-4 py-3 font-medium sm:pr-5">Eligible for affiliates</th>
+                <th className="px-4 py-3 font-medium">Availability</th>
               </tr>
             </thead>
             <tbody>
-              {filtered.map((p) => (
+              {products.map((p) => (
                 <tr key={p.id} className="border-b border-border last:border-0">
                   <td className="max-w-[240px] px-4 py-3 sm:px-5">
                     <p className="truncate font-medium text-foreground">{p.name}</p>
                   </td>
-                  <td className="px-4 py-3 text-muted">{p.category}</td>
-                  <td className="px-4 py-3 text-foreground">{formatCurrency(p.price)}</td>
+                  <td className="px-4 py-3 text-muted">{p.category ?? "Uncategorised"}</td>
+                  <td className="px-4 py-3 text-foreground">{formatCurrency(p.price, p.currency)}</td>
                   <td className="px-4 py-3">
-                    <div className="flex items-center gap-2">
-                      <div className="relative w-20">
-                        <input
-                          type="number"
-                          min={0}
-                          max={100}
-                          value={rateFor(p)}
-                          onChange={(e) => setDrafts((d) => ({ ...d, [p.id]: e.target.value }))}
-                          className="w-full rounded-lg border border-border bg-surface-2 py-1.5 pl-2.5 pr-6 text-sm text-foreground focus:border-accent focus:outline-none"
-                        />
-                        <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted">%</span>
-                      </div>
-                      {rateFor(p) !== String(p.commissionRate) && (
-                        <button
-                          onClick={() => saveRate(p.id)}
-                          className="rounded-md bg-accent px-2 py-1.5 text-xs font-semibold text-black hover:bg-accent-strong"
-                        >
-                          Save
-                        </button>
-                      )}
-                      {saved === p.id && <Check size={15} className="text-success" />}
-                    </div>
-                  </td>
-                  <td className="px-4 py-3">
-                    <Badge status={p.status}>{p.status}</Badge>
-                  </td>
-                  <td className="px-4 py-3 sm:pr-5">
-                    <button
-                      onClick={() => toggleEligible(p.id)}
-                      className={cn(
-                        "relative h-6 w-11 shrink-0 rounded-full transition-colors",
-                        p.eligible ? "bg-accent" : "bg-surface-2"
-                      )}
-                    >
-                      <span
-                        className={cn(
-                          "absolute top-0.5 h-5 w-5 rounded-full bg-black transition-transform",
-                          p.eligible ? "translate-x-5" : "translate-x-0.5"
-                        )}
-                      />
-                    </button>
+                    <span className={p.available ? "text-success" : "text-muted"}>
+                      {p.available ? "Available" : "Unavailable"}
+                    </span>
                   </td>
                 </tr>
               ))}
-              {filtered.length === 0 && (
+              {products.length === 0 && loadedOnce && (
                 <tr>
-                  <td colSpan={6} className="px-5 py-10 text-center text-sm text-muted">
-                    No products match your filters.
+                  <td colSpan={4} className="px-5 py-10 text-center text-sm text-muted">
+                    {error
+                      ? "The catalogue could not be loaded — see the message above."
+                      : filtering
+                        ? "No products in the catalogue match that search."
+                        : "The catalogue is empty."}
                   </td>
                 </tr>
               )}
             </tbody>
           </table>
         </div>
+        <Pagination page={page} pageCount={pageCount} onChange={setPage} total={total} pageSize={PER_PAGE} />
       </Card>
     </div>
   );

@@ -1,11 +1,14 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
-import { AppDataProvider } from "@/lib/store";
 
 const inter = Inter({
   variable: "--font-inter",
-  subsets: ["latin"],
+  // latin-ext carries the currency block (U+20A0–U+20AB), which is where the
+  // naira sign ₦ lives. With only `latin` the browser substituted a fallback
+  // font for that one character, whose crossbars ran into the digits and made
+  // every amount look struck through.
+  subsets: ["latin", "latin-ext"],
 });
 
 export const metadata: Metadata = {
@@ -21,9 +24,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="en" className={`${inter.variable} h-full antialiased`}>
-      <body className="min-h-full flex flex-col dark">
-        <AppDataProvider>{children}</AppDataProvider>
-      </body>
+      <body className="min-h-full flex flex-col dark">{children}</body>
     </html>
   );
 }
