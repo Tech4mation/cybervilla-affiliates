@@ -1,19 +1,22 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { AlertCircle, ImageOff, Link2 } from "lucide-react";
+import { AlertCircle, ImageOff, Link2, Tag } from "lucide-react";
 import Link from "next/link";
 import { Card } from "@/components/ui/Card";
+import { InfoHint } from "@/components/ui/InfoHint";
 import { Pagination } from "@/components/ui/Pagination";
 import { SearchInput, Select } from "@/components/ui/Toolbar";
 import {
   ApiError,
   fetchCategories,
+  fetchProductRewards,
   fetchProducts,
   productImageUrl,
   type ApiCategory,
   type ApiProduct,
   type CatalogueState,
+  type ProductReward,
 } from "@/lib/api";
 import { formatCurrency, timeAgo } from "@/lib/utils";
 
@@ -48,6 +51,29 @@ function ProductImage({ product }: { product: ApiProduct }) {
   );
 }
 
+/**
+ * What the campaign tag reveals when an affiliate hovers it.
+ *
+ * Always says "on top of your markup": the whole point of a campaign is that
+ * it does not replace what they already earn, and an affiliate reading a bare
+ * percentage could easily assume it does.
+ */
+function rewardTooltip(reward: ProductReward, product: ApiProduct): string {
+  const currency = reward.currency ?? product.currency;
+  const amount = formatCurrency(reward.amount, currency);
+  if (reward.rewardType === "percent") {
+    return (
+      `${reward.campaign}: earn ${reward.rewardValue}% commission on this product — ` +
+      `${amount} on a single unit, and more if they buy several. ` +
+      `This is on top of your own markup.`
+    );
+  }
+  return (
+    `${reward.campaign}: earn ${amount} commission for every one of these you sell, ` +
+    `on top of your own markup.`
+  );
+}
+
 export default function ProductsPage() {
   const [query, setQuery] = useState("");
   const [search, setSearch] = useState("");
@@ -58,6 +84,10 @@ export default function ProductsPage() {
   const [products, setProducts] = useState<ApiProduct[]>([]);
   const [total, setTotal] = useState(0);
   const [catalogue, setCatalogue] = useState<CatalogueState | null>(null);
+  // Which products currently carry a campaign reward, and what it pays. A
+  // failed fetch leaves this empty, which simply means no card mentions a
+  // campaign — never a broken page.
+  const [rewards, setRewards] = useState<Record<string, ProductReward>>({});
   const [error, setError] = useState<string | null>(null);
 
   // Which filters the products on screen belong to. Comparing it with the
@@ -82,6 +112,11 @@ export default function ProductsPage() {
       .then((result) => setCategories(result.categories))
       // A missing filter is a smaller problem than a missing product list, and
       // the list below reports the outage loudly enough for both.
+      .catch(() => undefined);
+    fetchProductRewards()
+      .then((result) => setRewards(result.rewards))
+      // No campaigns shown beats a page that will not load because an extra
+      // was unavailable.
       .catch(() => undefined);
     return () => controller.abort();
   }, []);
@@ -169,20 +204,38 @@ export default function ProductsPage() {
 
       {products.length > 0 && (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {products.map((product) => (
+          {products.map((product) => {
+            const reward = rewards[String(product.id)];
+            return (
             <Card key={product.id} className="flex flex-col overflow-hidden">
               <ProductImage product={product} />
               <div className="flex flex-1 flex-col gap-2 p-4">
                 <h3 className="text-sm font-medium leading-snug text-foreground">{product.name}</h3>
                 {product.category && <p className="text-xs text-muted">{product.category}</p>}
+                {reward && (
+                  // The tag says a campaign exists; the figures sit behind it
+                  // so the card stays quiet. InfoHint opens on hover for a
+                  // mouse, on tap for a touch screen, and on keyboard focus —
+                  // a hover-only tooltip would simply not exist on a phone.
+                  <InfoHint
+                    label={product.name}
+                    text={rewardTooltip(reward, product)}
+                    className="w-fit"
+                    triggerClassName="inline-flex items-center gap-1 rounded-full bg-accent/10 px-2 py-0.5 text-[11px] font-medium text-accent hover:bg-accent/20"
+                  >
+                    <Tag size={11} /> {reward.campaign}
+                  </InfoHint>
+                )}
                 <div className="mt-auto flex items-end justify-between gap-2 pt-2">
-                  <p className="text-base font-semibold text-foreground">
-                    {formatCurrency(product.price, product.currency)}
-                  </p>
-                  {/* Links are storewide, so this points at the links page
-                      rather than carrying a product that nothing would use. */}
+                  <div>
+                    <p className="text-base font-semibold text-foreground">
+                      {formatCurrency(product.price, product.currency)}
+                    </p>
+                  </div>
+                  {/* Carries the product so the link form opens with it
+                      already chosen — see the preset handling in links/page. */}
                   <Link
-                    href="/links"
+                    href={{ pathname: "/links", query: { product: product.id } }}
                     className="inline-flex items-center gap-1.5 rounded-lg bg-accent px-3 py-2 text-xs font-semibold text-black hover:bg-accent-strong"
                   >
                     <Link2 size={13} /> Get Link
@@ -190,7 +243,8 @@ export default function ProductsPage() {
                 </div>
               </div>
             </Card>
-          ))}
+            );
+          })}
         </div>
       )}
 

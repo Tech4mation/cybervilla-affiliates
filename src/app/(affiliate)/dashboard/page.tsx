@@ -91,9 +91,25 @@ export default function DashboardPage() {
       </div>
       {error && <div className="rounded-lg border border-danger/30 bg-danger/10 p-3 text-sm text-danger">{error}</div>}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <StatTile label="Recorded Sales" value={loading ? "..." : formatNumber(totals.sales)} icon={ShoppingBag} />
-        <StatTile label="Earnings" value={loading ? "..." : formatCurrency(totals.commissions, currency)} icon={Wallet} tone="up" />
-        <StatTile label="Avg. Order Value" value={loading ? "..." : formatCurrency(totals.orderValue, currency)} icon={Banknote} />
+        <StatTile
+          label="Recorded Sales"
+          value={loading ? "..." : formatNumber(totals.sales)}
+          icon={ShoppingBag}
+          info="How many paid orders came through your links in this period. Cancelled and refunded orders are not counted."
+        />
+        <StatTile
+          label="Earnings"
+          value={loading ? "..." : formatCurrency(totals.commissions, currency)}
+          icon={Wallet}
+          tone="up"
+          info="Your share of those orders added up — the markup you set, on everything those shoppers bought. It is what you earned, not what has been paid to you."
+        />
+        <StatTile
+          label="Avg. Order Value"
+          value={loading ? "..." : formatCurrency(totals.orderValue, currency)}
+          icon={Banknote}
+          info="What a customer spends per order on average, including your markup. This is the shopper's total, not your earning."
+        />
       </div>
       <Card>
         <CardHeader title="Sales & Earnings" subtitle={`Backend records over the last ${range.toLowerCase()}`} />
@@ -102,12 +118,19 @@ export default function DashboardPage() {
       <Card>
         <CardHeader title="Earnings Status" subtitle="Based on backend-reported earning records" />
         <div className="grid grid-cols-1 gap-3 p-4 sm:grid-cols-3 sm:p-5">
-          <AmountTile label="Pending" amount={breakdown.pending} tone="pending" currency={currency} />
+          <AmountTile
+            label="Pending"
+            amount={breakdown.pending}
+            tone="pending"
+            currency={currency}
+            info="Earned from orders the store has confirmed as paid, but still settling. Earnings wait here until the order is old enough to be unlikely to come back."
+          />
           <AmountTile
             label="Approved"
             amount={breakdown.approved}
             tone="approved"
             currency={currency}
+            info="Cleared and counted as yours. Once your approved total reaches the minimum, you can request a payout from the Earnings page."
             note={breakdown.approved ? undefined : "Nothing is approved yet — earnings stay pending for now."}
           />
           <AmountTile
@@ -115,6 +138,7 @@ export default function DashboardPage() {
             amount={breakdown.paid}
             tone="paid"
             currency={currency}
+            info="Already transferred to your bank account. This money has left CyberVilla."
             note={breakdown.paid ? undefined : "Payouts aren't available yet."}
           />
         </div>

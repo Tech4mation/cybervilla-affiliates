@@ -1,10 +1,19 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Copy, Check, Plus, AlertCircle, ShieldCheck, Loader2 } from "lucide-react";
+import { Suspense, useEffect, useState } from "react";
+import { Copy, Check, Plus, AlertCircle, ShieldCheck, Loader2, Trash2 } from "lucide-react";
 import { Card, CardHeader } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
-import { createAffiliateLink, fetchAffiliateLinks, type AffiliateLinkData } from "@/lib/api";
+import { useSearchParams } from "next/navigation";
+import {
+  createAffiliateLink,
+  deleteAffiliateLink,
+  fetchAffiliateLinks,
+  fetchProduct,
+  fetchProducts,
+  type AffiliateLinkData,
+  type ApiProduct,
+} from "@/lib/api";
 import {
   MAX_MARKUP_PERCENT,
   checkMarkupPercent,
@@ -12,27 +21,17 @@ import {
 import type { AffiliateLink } from "@/lib/types";
 import { cn, copyToClipboard, formatCurrency, formatNumber } from "@/lib/utils";
 
-const DEFAULT_MARKUP = 5;
-
-/** The shareable address, with whatever campaign tags the affiliate typed. */
-function withUtm(url: string, source: string, medium: string) {
-  const parts = [
-    source.trim() && `utm_source=${encodeURIComponent(source.trim())}`,
-    medium.trim() && `utm_medium=${encodeURIComponent(medium.trim())}`,
-  ].filter(Boolean);
-  if (parts.length === 0) return url;
-  return `${url}${url.includes("?") ? "&" : "?"}${parts.join("&")}`;
-}
+const DEFAULT_MARKUP = 0;
 
 function toLink(l: AffiliateLinkData): AffiliateLink {
+  const isProduct = l.targetType === "Product";
   return {
     id: l.id,
     label: l.label,
-    targetType: "Storewide",
-    target: "Entire store",
+    targetType: isProduct ? "Product" : "Storewide",
+    target: isProduct ? l.productName || "Product no longer listed" : "Entire store",
     url: l.url,
     code: l.code,
-    utm: undefined,
     sales: l.sales ?? 0,
     earnings: l.earnings ?? 0,
     commissions: l.earnings ?? 0,
@@ -105,26 +104,73 @@ function CopyableCode({ code }: { code: string }) {
 }
 
 function LinksContent() {
+  const params = useSearchParams();
   const [links, setLinks] = useState<AffiliateLink[]>([]);
+  const [maxLinks, setMaxLinks] = useState<number | null>(null);
+  const [deleting, setDeleting] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
 
   const [markup, setMarkup] = useState<string>(String(DEFAULT_MARKUP));
-  const [label, setLabel] = useState("");
-  const [utmSource, setUtmSource] = useState("");
-  const [utmMedium, setUtmMedium] = useState("");
   const [generated, setGenerated] = useState<AffiliateLink | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
+  // Where the link lands. "Storewide" is the default, so doing nothing gives
+  // the behaviour that was there before.
+  const [target, setTarget] = useState<"Storewide" | "Product">("Storewide");
+  const [product, setProduct] = useState<ApiProduct | null>(null);
+  const [productQuery, setProductQuery] = useState("");
+  const [productResults, setProductResults] = useState<ApiProduct[]>([]);
+  const [searchingProducts, setSearchingProducts] = useState(false);
+
   const markupNum = Number(markup);
+
+  // The catalogue runs to thousands of items, so this searches the database
+  // rather than offering a dropdown of everything.
+  useEffect(() => {
+    const term = productQuery.trim();
+    // Nothing is cleared here: setting state straight from an effect causes a
+    // cascading render. Whether results are shown is derived below instead.
+    if (target !== "Product" || term.length < 2) return;
+    const controller = new AbortController();
+    const timer = setTimeout(() => {
+      fetchProducts({ search: term, perPage: 8 }, controller.signal)
+        .then((page) => {
+          setProductResults(page.products);
+          setSearchingProducts(false);
+        })
+        .catch(() => setSearchingProducts(false));
+    }, 300);
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [productQuery, target]);
+
+  // Arriving from a product's "Get Link" button preselects that product.
+  useEffect(() => {
+    const preset = Number(params.get("product"));
+    if (!preset) return;
+    const controller = new AbortController();
+    fetchProduct(preset, controller.signal)
+      .then(({ product: found }) => {
+        setTarget("Product");
+        setProduct(found);
+        setProductQuery(found.name);
+      })
+      // A stale or bad id just leaves the form on its storewide default.
+      .catch(() => undefined);
+    return () => controller.abort();
+  }, [params]);
 
   // Starts with the request, so nothing is set synchronously when the effect
   // below runs it; every state change happens once the response is in.
   function load() {
     return fetchAffiliateLinks()
-      .then(({ links: apiLinks }) => {
-        setLinks(apiLinks.map(toLink));
+      .then((page) => {
+        setLinks(page.links.map(toLink));
+        setMaxLinks(page.maxLinks ?? null);
         setLoadError(null);
       })
       // A failed load must not look like "you have no links yet".
@@ -145,26 +191,58 @@ function LinksContent() {
   }
 
   const check = checkMarkupPercent(markupNum);
-  // A 0% link earns the affiliate nothing, so it is not something to create by
-  // accident by clearing the box.
-  const usableMarkup = markup.trim() !== "" && markupNum > 0;
   const valid = check.ok;
+  // An empty box reads as no markup, which is the default and is allowed: the
+  // link then sells at CyberVilla's own price and earns nothing. It is said
+  // plainly under the field rather than blocked.
+  const earns = markupNum > 0;
+
+  const needsProduct = target === "Product" && !product;
+  // The server enforces this too — the button state is only a courtesy.
+  const atLimit = maxLinks !== null && links.length >= maxLinks;
+
+  async function handleDelete(link: AffiliateLink) {
+    const earned = (link.earnings ?? 0) > 0 || link.sales > 0;
+    const warning = earned
+      ? `Delete "${link.label}"?\n\nIt will stop working immediately. Its ${link.sales} recorded sale(s) and earnings stay on your account.`
+      : `Delete "${link.label}"?\n\nIt will stop working immediately and anyone who already has it will just see the normal shop.`;
+    if (!window.confirm(warning)) return;
+
+    setDeleting(link.id);
+    setSubmitError(null);
+    try {
+      await deleteAffiliateLink(link.id);
+      setLinks((prev) => prev.filter((l) => l.id !== link.id));
+      if (generated?.id === link.id) setGenerated(null);
+    } catch (error) {
+      setSubmitError(
+        error instanceof Error ? error.message : "We could not delete that link. Please try again.",
+      );
+    } finally {
+      setDeleting(null);
+    }
+  }
+  // Derived, so clearing the box hides stale matches without an effect.
+  const matches = target === "Product" && productQuery.trim().length >= 2 ? productResults : [];
 
   async function handleGenerate() {
-    // An empty box reads as 0, which would silently create a link the
-    // affiliate earns nothing on.
-    if (!markup.trim() || markupNum <= 0 || !valid || submitting) return;
+    if (!valid || submitting || needsProduct || atLimit) return;
     setSubmitting(true);
     setSubmitError(null);
     try {
+      const chosen = target === "Product" ? product : null;
+      // The affiliate no longer names a link, so it names itself after where it
+      // points. The markup is appended only when there is one, which is what
+      // tells two links to the same place apart.
+      const where = chosen ? chosen.name.slice(0, 40) : "Shop link";
       const { link: apiLink } = await createAffiliateLink({
         markupPercent: markupNum,
-        label: label.trim() || `${markupNum}% markup${utmSource.trim() ? ` · ${utmSource.trim()}` : ""}`,
+        productId: chosen?.id,
+        label: markupNum > 0 ? `${where} · ${markupNum}%` : where,
       });
       const newLink = toLink(apiLink);
       setLinks((prev) => [newLink, ...prev]);
-      setGenerated({ ...newLink, url: withUtm(newLink.url, utmSource, utmMedium) });
-      setLabel("");
+      setGenerated(newLink);
     } catch (error) {
       setSubmitError(
         error instanceof Error ? error.message : "We could not create that link. Please try again."
@@ -181,7 +259,8 @@ function LinksContent() {
       <p className="text-sm text-muted">
         Every link comes with a matching code you can say or text instead. You decide what to sell at — up to{" "}
         {MAX_MARKUP_PERCENT}% above CyberVilla&apos;s price — and whatever the buyer pays above that price is
-        yours. Your markup travels with the link, so it applies to whatever they end up buying through it.
+        yours. A link can open the shop or go straight to one product, but either way your markup travels with
+        the link: if they buy something else instead, you still earn on it.
       </p>
 
       {loadError && (
@@ -202,34 +281,89 @@ function LinksContent() {
 
       <Card>
         <CardHeader title="Generate a new affiliate link" subtitle="Links and codes carry your unique tracking identifier automatically." />
-        <div className="grid gap-3 p-4 sm:grid-cols-2 sm:p-5 lg:grid-cols-4">
+        <div className="space-y-3 border-b border-border p-4 sm:p-5">
           <div className="space-y-1">
-            <label className="text-xs font-medium text-muted">Link name (optional)</label>
-            <input
-              value={label}
-              onChange={(e) => setLabel(e.target.value)}
-              placeholder="Instagram bio"
-              className="w-full rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm text-foreground placeholder:text-muted focus:border-accent focus:outline-none"
-            />
+            <label className="text-xs font-medium text-muted">Where the link opens</label>
+            <div className="flex gap-2">
+              {(["Storewide", "Product"] as const).map((option) => (
+                <button
+                  key={option}
+                  type="button"
+                  onClick={() => setTarget(option)}
+                  className={cn(
+                    "rounded-lg border px-3 py-2 text-sm font-medium",
+                    target === option
+                      ? "border-accent bg-accent/10 text-accent"
+                      : "border-border text-muted hover:bg-surface-2",
+                  )}
+                >
+                  {option === "Storewide" ? "The shop" : "One product"}
+                </button>
+              ))}
+            </div>
           </div>
-          <div className="space-y-1">
-            <label className="text-xs font-medium text-muted">UTM source (optional)</label>
-            <input
-              value={utmSource}
-              onChange={(e) => setUtmSource(e.target.value)}
-              placeholder="instagram"
-              className="w-full rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm text-foreground placeholder:text-muted focus:border-accent focus:outline-none"
-            />
-          </div>
-          <div className="space-y-1">
-            <label className="text-xs font-medium text-muted">UTM medium (optional)</label>
-            <input
-              value={utmMedium}
-              onChange={(e) => setUtmMedium(e.target.value)}
-              placeholder="bio"
-              className="w-full rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm text-foreground placeholder:text-muted focus:border-accent focus:outline-none"
-            />
-          </div>
+
+          {target === "Product" && (
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-muted">Which product</label>
+              {product ? (
+                <div className="flex items-center justify-between gap-3 rounded-lg border border-border bg-surface-2 px-3 py-2">
+                  <span className="min-w-0 truncate text-sm text-foreground">{product.name}</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setProduct(null);
+                      setProductQuery("");
+                    }}
+                    className="shrink-0 text-xs font-medium text-muted hover:text-foreground"
+                  >
+                    Change
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <input
+                    value={productQuery}
+                    onChange={(e) => {
+                      setProductQuery(e.target.value);
+                      setSearchingProducts(e.target.value.trim().length >= 2);
+                    }}
+                    placeholder="Search the catalogue…"
+                    className="w-full rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm text-foreground placeholder:text-muted focus:border-accent focus:outline-none"
+                  />
+                  {productQuery.trim().length >= 2 && (
+                    <div className="max-h-52 overflow-y-auto rounded-lg border border-border">
+                      {searchingProducts && (
+                        <p className="px-3 py-2 text-xs text-muted">Searching…</p>
+                      )}
+                      {!searchingProducts && matches.length === 0 && (
+                        <p className="px-3 py-2 text-xs text-muted">No products match that search.</p>
+                      )}
+                      {matches.map((item) => (
+                        <button
+                          key={item.id}
+                          type="button"
+                          onClick={() => {
+                            setProduct(item);
+                            setProductResults([]);
+                          }}
+                          className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm hover:bg-surface-2"
+                        >
+                          <span className="min-w-0 truncate text-foreground">{item.name}</span>
+                          <span className="shrink-0 text-xs text-muted">
+                            {formatCurrency(item.price, item.currency)}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  <p className="text-[11px] text-muted">
+                    The customer lands on this product. Your markup still applies to anything else they buy.
+                  </p>
+                </>
+              )}
+            </div>
+          )}
         </div>
 
         <div className="border-t border-border p-4 sm:p-5">
@@ -251,9 +385,17 @@ function LinksContent() {
                 <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted">%</span>
               </div>
               {check.ok ? (
-                <span className="text-xs font-medium text-success">
-                  Everything bought through this link sells for {markupNum}% more, and that {markupNum}% is yours
-                </span>
+                earns ? (
+                  <span className="text-xs font-medium text-success">
+                    Everything bought through this link sells for {markupNum}% more, and that {markupNum}% is
+                    yours
+                  </span>
+                ) : (
+                  <span className="text-xs font-medium text-muted">
+                    No markup: this link sells at CyberVilla&apos;s own price and earns you nothing. Add a
+                    percentage above if you want to earn on it.
+                  </span>
+                )
               ) : (
                 <span className="inline-flex items-center gap-1 text-xs font-medium text-danger">
                   <AlertCircle size={13} /> {check.reason}
@@ -269,12 +411,18 @@ function LinksContent() {
         <div className="space-y-3 border-t border-border p-4 sm:p-5">
           <button
             onClick={handleGenerate}
-            disabled={!valid || !usableMarkup || submitting}
+            disabled={!valid || needsProduct || atLimit || submitting}
             className="inline-flex items-center gap-1.5 rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-black hover:bg-accent-strong disabled:cursor-not-allowed disabled:opacity-50"
           >
             {submitting ? <Loader2 size={15} className="animate-spin" /> : <Plus size={15} />}
             {submitting ? "Generating…" : "Generate Link & Code"}
           </button>
+          {atLimit && (
+            <p className="inline-flex items-start gap-1.5 text-xs text-muted">
+              <AlertCircle size={13} className="mt-0.5 shrink-0" />
+              You have all {maxLinks} of your links. Delete one below to make room for another.
+            </p>
+          )}
           {submitError && (
             <p className="inline-flex items-start gap-1.5 text-xs font-medium text-danger">
               <AlertCircle size={13} className="mt-0.5 shrink-0" /> {submitError}
@@ -296,9 +444,8 @@ function LinksContent() {
               </div>
               <p className="flex items-start gap-1.5 text-[11px] text-muted">
                 <ShieldCheck size={12} className="mt-0.5 shrink-0 text-success" />
-                The address carries only your code{generated.url.includes("utm_") ? " and your campaign tags" : ""}.
-                The price it stands for is looked up when someone opens it, so nobody can change it on the way
-                through.
+                The address carries only your code. The price it stands for is looked up when someone opens
+                it, so nobody can change it on the way through.
               </p>
             </div>
           )}
@@ -306,7 +453,10 @@ function LinksContent() {
       </Card>
 
       <Card>
-        <CardHeader title="Your links & codes" subtitle={`${links.length} generated`} />
+        <CardHeader
+          title="Your links & codes"
+          subtitle={maxLinks !== null ? `${links.length} of ${maxLinks} used` : `${links.length} generated`}
+        />
         <div className="overflow-x-auto">
           <table className="w-full min-w-[880px] text-sm">
             <thead>
@@ -342,7 +492,9 @@ function LinksContent() {
                   </td>
                   <td className="px-4 py-3 text-muted">{l.targetType}</td>
                   <td className="px-4 py-3 text-muted">
-                    <span className="text-foreground">+{l.markupPercent ?? 0}% on everything</span>
+                    <span className="text-foreground">
+                      {l.markupPercent ? `+${l.markupPercent}% on everything` : "CyberVilla's price"}
+                    </span>
                   </td>
                   <td className="px-4 py-3 text-foreground">{formatNumber(l.sales)}</td>
                   <td className="px-4 py-3 font-medium text-accent">{formatCurrency(l.earnings ?? l.commissions, l.currency ?? null)}</td>
@@ -350,7 +502,22 @@ function LinksContent() {
                     <Badge status={l.status}>{l.status}</Badge>
                   </td>
                   <td className="px-4 py-3 sm:pr-5">
-                    <CopyButton text={l.url} />
+                    <div className="flex items-center justify-end gap-2">
+                      <CopyButton text={l.url} />
+                      <button
+                        onClick={() => handleDelete(l)}
+                        disabled={deleting === l.id}
+                        title="Delete this link"
+                        aria-label={`Delete ${l.label}`}
+                        className="inline-flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1.5 text-xs font-medium text-muted hover:border-danger hover:text-danger disabled:opacity-50"
+                      >
+                        {deleting === l.id ? (
+                          <Loader2 size={13} className="animate-spin" />
+                        ) : (
+                          <Trash2 size={13} />
+                        )}
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -363,5 +530,9 @@ function LinksContent() {
 }
 
 export default function LinksPage() {
-  return <LinksContent />;
+  return (
+    <Suspense fallback={<div className="p-8 text-center text-sm text-muted">Loading…</div>}>
+      <LinksContent />
+    </Suspense>
+  );
 }

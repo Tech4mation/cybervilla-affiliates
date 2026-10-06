@@ -49,7 +49,6 @@ export default function SettingsPage() {
           <ReadOnlyField label="Phone number" value={user.phone || "Not provided"} />
           <ReadOnlyField label="Account role" value={user.role} />
           <ReadOnlyField label="Membership status" value={user.status} />
-          <ReadOnlyField label="Promotional channel" value={user.promotionalChannel || "Not provided"} />
         </div>
       </Card>
 

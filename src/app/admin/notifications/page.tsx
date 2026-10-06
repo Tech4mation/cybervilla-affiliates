@@ -2,6 +2,6 @@
 
 import { NotificationList } from "@/components/NotificationList";
 
-export default function NotificationsPage() {
+export default function AdminNotificationsPage() {
   return <NotificationList />;
 }

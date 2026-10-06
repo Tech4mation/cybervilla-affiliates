@@ -63,10 +63,31 @@ export default function AdminOverviewPage() {
       )}
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <StatTile label="Recorded Earnings" value={show(formatCurrency(pending + approved + paid, currency))} icon={Wallet} tone="up" />
-        <StatTile label="Pending Earnings" value={show(formatCurrency(pending, currency))} icon={Wallet} />
-        <StatTile label="Affiliates" value={show(formatNumber(affiliateTotal ?? 0))} icon={Users} />
-        <StatTile label="Catalogue Products" value={show(formatNumber(productCount ?? 0))} icon={Package} />
+        <StatTile
+          label="Recorded Earnings"
+          value={show(formatCurrency(pending + approved + paid, currency))}
+          icon={Wallet}
+          tone="up"
+          info="Everything affiliates have earned across the platform — pending, approved and paid added together. Earnings reversed by a cancellation or refund are left out."
+        />
+        <StatTile
+          label="Pending Earnings"
+          value={show(formatCurrency(pending, currency))}
+          icon={Wallet}
+          info="The part of that total still settling. It is not payable until it is approved, which is what the Payouts page is for."
+        />
+        <StatTile
+          label="Affiliates"
+          value={show(formatNumber(affiliateTotal ?? 0))}
+          icon={Users}
+          info="Every affiliate account on record, at any status — pending applications and rejected ones included, not just the approved."
+        />
+        <StatTile
+          label="Catalogue Products"
+          value={show(formatNumber(productCount ?? 0))}
+          icon={Package}
+          info="How many products have been pulled in from the CyberVilla store and are available for affiliates to promote."
+        />
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
@@ -99,12 +120,19 @@ export default function AdminOverviewPage() {
         <Card>
           <CardHeader title="Earnings status" subtitle="Store-reported records" />
           <div className="grid grid-cols-1 gap-3 p-4 sm:grid-cols-3 sm:p-5">
-            <AmountTile label="Pending" amount={pending} tone="pending" currency={currency} />
+            <AmountTile
+              label="Pending"
+              amount={pending}
+              tone="pending"
+              currency={currency}
+              info="Owed to affiliates from paid orders, but still inside the settling window. Nothing here can be paid out yet."
+            />
             <AmountTile
               label="Approved"
               amount={approved}
               tone="approved"
               currency={currency}
+              info="Cleared for payment. This is what affiliates can request, and what a payout run draws on."
               note={approved ? undefined : "No approval step yet — earnings stay pending."}
             />
             <AmountTile
@@ -112,6 +140,7 @@ export default function AdminOverviewPage() {
               amount={paid}
               tone="paid"
               currency={currency}
+              info="Already transferred out to affiliates and recorded against a payout."
               note={paid ? undefined : "Payouts aren't built yet."}
             />
           </div>

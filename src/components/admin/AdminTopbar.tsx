@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { LogOut, Menu, ShieldCheck } from "lucide-react";
+import { NotificationBell } from "@/components/NotificationBell";
 import { ADMIN_NAV_ITEMS } from "@/lib/admin-nav";
 import { getCurrentUser, signoutUser } from "@/lib/api";
 
@@ -42,6 +43,7 @@ export function AdminTopbar({ onMenuClick }: { onMenuClick: () => void }) {
       </div>
 
       <div className="flex items-center gap-3">
+        <NotificationBell href="/admin/notifications" />
         {user && (
           <>
             <span className="flex h-7 w-7 items-center justify-center rounded-full bg-brand-gradient text-xs font-semibold text-white">

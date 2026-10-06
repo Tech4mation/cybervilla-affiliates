@@ -23,13 +23,12 @@ export interface Product {
 export interface AffiliateLink {
   id: string;
   label: string;
-  /** Every link is storewide — there is no per-product link type. */
-  targetType: "Storewide";
+  /** A product link only changes where the customer lands, not the markup. */
+  targetType: "Storewide" | "Product";
   target: string;
   url: string;
   /** Typeable substitute for the URL — same tracking and commission as the link. */
   code: string;
-  utm?: string;
   sales: number;
   earnings?: number;
   commissions: number;
@@ -76,10 +75,9 @@ export interface SupportTicket {
 
 export type AffiliateAccountStatus = "active" | "approved" | "suspended" | "pending" | "rejected";
 
+/** What an applicant tells us. Channel, channel link and audience size were
+ *  dropped from sign-up, so an application is just their pitch now. */
 export interface AffiliateApplication {
-  channel: "Instagram" | "TikTok" | "YouTube" | "Blog / Website" | "WhatsApp Community" | "Twitter/X";
-  channelUrl: string;
-  audienceSize: number;
   pitch: string;
   appliedAt: string;
 }
