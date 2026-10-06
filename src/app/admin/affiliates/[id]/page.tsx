@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Check, ExternalLink, Users, X } from "lucide-react";
+import { ArrowLeft, Check, X } from "lucide-react";
 import { useParams } from "next/navigation";
 import { Badge } from "@/components/ui/Badge";
 import { Card, CardHeader } from "@/components/ui/Card";
@@ -14,7 +14,7 @@ import {
   type AdminAffiliateDetail,
 } from "@/lib/api";
 import { useAppData } from "@/lib/store";
-import { formatCurrency, formatDate, formatNumber } from "@/lib/utils";
+import { formatCurrency, formatDate } from "@/lib/utils";
 
 export default function AdminAffiliateDetailPage() {
   const params = useParams<{ id: string }>();
@@ -105,9 +105,6 @@ export default function AdminAffiliateDetailPage() {
         <div className="grid gap-4 p-4 sm:grid-cols-2 sm:p-5">
           <div className="space-y-3 text-sm">
             <p><span className="text-muted">Phone:</span> {affiliate.phone || "Not provided"}</p>
-            <p><span className="text-muted">Channel:</span> {affiliate.promotionalChannel || "Not provided"}</p>
-            <p className="flex items-center gap-1"><span className="text-muted">Audience:</span> <Users size={14} /> {affiliate.audienceSize ? formatNumber(Number(affiliate.audienceSize)) : "Not provided"}</p>
-            {affiliate.channelUrl && <a href={affiliate.channelUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-accent hover:underline">{affiliate.channelUrl} <ExternalLink size={12} /></a>}
           </div>
           <p className="text-sm text-foreground">{affiliate.whyJoin || "No application statement provided."}</p>
         </div>

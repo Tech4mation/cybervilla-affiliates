@@ -18,9 +18,6 @@ function toAdminAffiliate(item: Awaited<ReturnType<typeof fetchAdminAffiliates>>
     payableBalance: 0,
     linkCount: 0,
     application: {
-      channel: item.promotionalChannel as AdminAffiliate["application"]["channel"],
-      channelUrl: item.channelUrl ?? "",
-      audienceSize: Number(item.audienceSize) || 0,
       pitch: item.whyJoin ?? "",
       appliedAt: item.joinedAt ?? "",
     },

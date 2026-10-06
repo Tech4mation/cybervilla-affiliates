@@ -1,4 +1,5 @@
 import { cn, formatCurrency } from "@/lib/utils";
+import { InfoHint } from "@/components/ui/InfoHint";
 
 export type AmountTone = "pending" | "approved" | "paid" | "reversed";
 
@@ -23,6 +24,7 @@ export function AmountTile({
   tone,
   currency,
   note,
+  info,
 }: {
   label: string;
   amount: number;
@@ -30,6 +32,8 @@ export function AmountTile({
   currency: string | null;
   /** Why this figure is what it is — shown only when there's something to say. */
   note?: string;
+  /** What this figure means, for anyone who has not been told. */
+  info?: string;
 }) {
   const empty = !amount;
 
@@ -40,7 +44,8 @@ export function AmountTile({
           aria-hidden
           className={cn("h-1.5 w-1.5 shrink-0 rounded-full", empty ? "bg-border" : dotTone[tone])}
         />
-        <span className="text-xs font-medium text-muted">{label}</span>
+        <span className="truncate text-xs font-medium text-muted">{label}</span>
+        {info && <InfoHint label={label} text={info} />}
       </div>
       <p
         className={cn(

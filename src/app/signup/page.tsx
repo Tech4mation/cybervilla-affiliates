@@ -6,22 +6,9 @@ import Link from "next/link";
 import { AlertCircle, Clock, ArrowRight } from "lucide-react";
 import { signupAffiliate, setStoredToken, ApiError } from "@/lib/api";
 
-const PROMOTIONAL_CHANNELS = [
-  "Instagram",
-  "TikTok",
-  "YouTube",
-  "Blog / Website",
-  "WhatsApp Community",
-  "Twitter/X",
-  "Other",
-] as const;
-
 export default function SignUpPage() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
-  const [promotionalChannel, setPromotionalChannel] = useState<string>("");
-  const [channelUrl, setChannelUrl] = useState("");
-  const [audienceSize, setAudienceSize] = useState("");
   const [whyJoin, setWhyJoin] = useState("");
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
@@ -39,9 +26,6 @@ export default function SignUpPage() {
       const res = await signupAffiliate({
         name,
         email,
-        promotionalChannel,
-        channelUrl,
-        audienceSize,
         whyJoin,
         phone,
         password,
@@ -155,49 +139,6 @@ export default function SignUpPage() {
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs font-medium text-foreground mb-1">Promotional Channel *</label>
-                    <select
-                      required
-                      value={promotionalChannel}
-                      onChange={(e) => setPromotionalChannel(e.target.value)}
-                      className="w-full rounded-xl border border-border bg-surface-2 px-3.5 py-2.5 text-sm text-foreground focus:border-accent focus:outline-none transition"
-                    >
-                      <option value="" disabled>Select your channel...</option>
-                      {PROMOTIONAL_CHANNELS.map((ch) => (
-                        <option key={ch} value={ch} className="bg-surface text-foreground">
-                          {ch}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-medium text-foreground mb-1">Link to Channel *</label>
-                    <input
-                      type="url"
-                      required
-                      value={channelUrl}
-                      onChange={(e) => setChannelUrl(e.target.value)}
-                      placeholder="https://instagram.com/yourhandle"
-                      className="w-full rounded-xl border border-border bg-surface-2 px-3.5 py-2.5 text-sm text-foreground placeholder:text-muted focus:border-accent focus:outline-none transition"
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs font-medium text-foreground mb-1">Audience Size *</label>
-                    <input
-                      type="text"
-                      required
-                      value={audienceSize}
-                      onChange={(e) => setAudienceSize(e.target.value)}
-                      placeholder="e.g. 15,000 followers"
-                      className="w-full rounded-xl border border-border bg-surface-2 px-3.5 py-2.5 text-sm text-foreground placeholder:text-muted focus:border-accent focus:outline-none transition"
-                    />
-                  </div>
-
                   <div>
                     <label className="block text-xs font-medium text-foreground mb-1">Phone Number (Optional)</label>
                     <input

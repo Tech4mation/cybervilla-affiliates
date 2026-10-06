@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { LogOut, Menu, Bell } from "lucide-react";
+import { LogOut, Menu } from "lucide-react";
+import { NotificationBell } from "@/components/NotificationBell";
 import { NAV_ITEMS } from "@/lib/nav";
 import { getCurrentUser, signoutUser } from "@/lib/api";
 
@@ -40,13 +41,7 @@ export function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
       </div>
 
       <div className="flex items-center gap-2 sm:gap-4">
-        <Link
-          href="/notifications"
-          className="relative rounded-lg p-2 text-muted hover:bg-surface-2 hover:text-foreground"
-          aria-label="Notifications"
-        >
-          <Bell size={18} />
-        </Link>
+        <NotificationBell href="/notifications" />
         {user && (
           <Link
             href="/settings"

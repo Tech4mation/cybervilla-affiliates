@@ -14,11 +14,15 @@ type SortKey = "date" | "amount" | "earning";
 // Exactly the states the backend can report (see Earning.status). Offering
 // anything else gives a filter that silently never matches.
 const STATUSES = ["All Statuses", "pending", "approved", "payable", "paid", "reversed"];
+// "Source" means which link brought the sale in, so the choices are the
+// kinds of link there are — not the products, which the store never tells us.
+const SOURCES = ["All Sources", "Storewide links", "Product links"];
 const PAGE_SIZE = 10;
 
 export default function TransactionsPage() {
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("All Statuses");
+  const [source, setSource] = useState("All Sources");
   const [sortKey, setSortKey] = useState<SortKey>("date");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [page, setPage] = useState(1);
@@ -40,9 +44,14 @@ export default function TransactionsPage() {
       const q = query.toLowerCase();
       const matchesQuery =
         t.orderRef?.toLowerCase().includes(q) ||
-        (t.affiliateCode && t.affiliateCode.toLowerCase().includes(q));
+        (t.affiliateCode && t.affiliateCode.toLowerCase().includes(q)) ||
+        (t.sourceLabel && t.sourceLabel.toLowerCase().includes(q));
       const matchesStatus = status === "All Statuses" || t.status === status;
-      return matchesQuery && matchesStatus;
+      const matchesSource =
+        source === "All Sources" ||
+        (source === "Storewide links" && t.sourceKind === "storewide") ||
+        (source === "Product links" && t.sourceKind === "product");
+      return matchesQuery && matchesStatus && matchesSource;
     });
     const sorted = [...rows].sort((a, b) => {
       const dir = sortDir === "asc" ? 1 : -1;
@@ -51,7 +60,7 @@ export default function TransactionsPage() {
       return dir * (a.earning - b.earning);
     });
     return sorted;
-  }, [earnings, query, status, sortKey, sortDir]);
+  }, [earnings, query, status, source, sortKey, sortDir]);
 
   const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   // Filtering to fewer rows than the current page would otherwise strand the
@@ -73,9 +82,15 @@ export default function TransactionsPage() {
       order_ref: t.orderRef,
       date: t.occurredAt,
       amount_total: t.amountTotal,
-      earning: t.earning,
+      earning_markup: t.earning,
+      earning_commission: t.commission ?? 0,
+      earning_total: t.totalDue ?? t.earning,
+      items: (t.lines ?? []).map((l) => `${l.quantity}x ${l.name}`).join("; "),
       status: t.status,
       affiliate_code: t.affiliateCode,
+      source: t.sourceKind === "product" ? "product link" : "storewide link",
+      source_label: t.sourceLabel ?? "",
+      payout: t.payoutRef ?? "",
     }));
     downloadFile(toCsv(rows), `cybervilla-transactions-${new Date().toISOString().slice(0, 10)}.csv`);
   }
@@ -98,10 +113,11 @@ export default function TransactionsPage() {
         <SearchInput
           value={query}
           onChange={(value) => { setQuery(value); setPage(1); }}
-          placeholder="Search order ID, code…"
+          placeholder="Search order ID, code, source…"
           className="sm:max-w-xs"
         />
         <Select value={status} onChange={(value) => { setStatus(value); setPage(1); }} options={STATUSES} />
+        <Select value={source} onChange={(value) => { setSource(value); setPage(1); }} options={SOURCES} />
         <button
           onClick={handleExport}
           className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-xs font-medium text-foreground hover:bg-surface-2 sm:ml-auto"
@@ -113,33 +129,102 @@ export default function TransactionsPage() {
       <Card>
         <CardHeader title="Transactions" subtitle={`${filtered.length} matching transactions`} />
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[640px] text-sm">
+          <table className="w-full min-w-[980px] text-sm">
             <thead>
               <tr className="border-b border-border text-left text-xs text-muted">
                 <th className="px-4 py-3 font-medium sm:px-5">Order</th>
                 <SortableHeader label="Date" active={sortKey === "date"} dir={sortDir} onClick={() => toggleSort("date")} />
-                <th className="px-4 py-3 font-medium">Amount</th>
-                <SortableHeader label="Earning" active={sortKey === "earning"} dir={sortDir} onClick={() => toggleSort("earning")} />
-                <th className="px-4 py-3 font-medium">Code</th>
-                <th className="px-4 py-3 font-medium sm:pr-5">Status</th>
+                <SortableHeader label="Order total" active={sortKey === "amount"} dir={sortDir} onClick={() => toggleSort("amount")} />
+                <th className="px-4 py-3 font-medium">Items</th>
+                <th className="px-4 py-3 font-medium">Source</th>
+                <SortableHeader label="You earn" active={sortKey === "earning"} dir={sortDir} onClick={() => toggleSort("earning")} />
+                <th className="px-4 py-3 font-medium">Status</th>
+                <th className="px-4 py-3 font-medium sm:pr-5">Payout</th>
               </tr>
             </thead>
             <tbody>
               {pageRows.map((t) => (
                 <tr key={t.orderRef} className="border-b border-border last:border-0">
                   <td className="px-4 py-3 font-medium text-foreground sm:px-5">{t.orderRef}</td>
-                  <td className="px-4 py-3 text-muted">{t.occurredAt ? formatDate(t.occurredAt) : "—"}</td>
-                  <td className="px-4 py-3 text-foreground">{formatCurrency(t.amountTotal, t.currency)}</td>
-                  <td className="px-4 py-3 font-medium text-accent">{formatCurrency(t.earning, t.currency)}</td>
-                  <td className="px-4 py-3 text-muted">{t.affiliateCode || "—"}</td>
-                  <td className="px-4 py-3 sm:pr-5">
+                  <td className="px-4 py-3 whitespace-nowrap text-muted">
+                    {t.occurredAt ? formatDate(t.occurredAt) : "—"}
+                  </td>
+                  <td className="px-4 py-3 tabular-nums text-foreground">
+                    {formatCurrency(t.amountTotal, t.currency)}
+                  </td>
+                  <td className="px-4 py-3">
+                    {t.lines && t.lines.length > 0 ? (
+                      <div className="space-y-0.5">
+                        {t.lines.slice(0, 2).map((line, i) => (
+                          <p key={i} className="text-xs text-foreground">
+                            <span className="text-muted">{line.quantity}&times;</span> {line.name}
+                            {line.commission > 0 && (
+                              <span className="ml-1 text-accent">
+                                +{formatCurrency(line.commission, t.currency)}
+                              </span>
+                            )}
+                          </p>
+                        ))}
+                        {t.lines.length > 2 && (
+                          <p className="text-[11px] text-muted">
+                            and {t.lines.length - 2} more
+                          </p>
+                        )}
+                      </div>
+                    ) : (
+                      // Orders from before the store began reporting its
+                      // lines. Saying so beats an empty cell that reads as
+                      // "nothing was bought".
+                      <span className="text-xs text-muted">Not reported</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3">
+                    <p className="text-foreground">{t.sourceLabel || t.sourceCode || t.affiliateCode || "—"}</p>
+                    <p className="text-[11px] text-muted">
+                      {t.sourceKind === "product"
+                        ? "Product link"
+                        : t.sourceKind === "storewide"
+                          ? "Storewide link"
+                          : "Link no longer on record"}
+                    </p>
+                  </td>
+                  <td className="px-4 py-3 tabular-nums">
+                    <p className="font-medium text-accent">
+                      {formatCurrency(t.totalDue ?? t.earning, t.currency)}
+                    </p>
+                    {(t.commission ?? 0) > 0 && (
+                      <p className="text-[11px] text-muted">
+                        {formatCurrency(t.earning, t.currency)} markup ·{" "}
+                        <span className="text-accent">
+                          {formatCurrency(t.commission ?? 0, t.currency)} campaign
+                        </span>
+                      </p>
+                    )}
+                  </td>
+                  <td className="px-4 py-3">
                     <Badge status={t.status}>{t.status}</Badge>
+                  </td>
+                  <td className="px-4 py-3 sm:pr-5">
+                    {t.status === "reversed" ? (
+                      <span className="text-xs text-muted">—</span>
+                    ) : t.payoutRef ? (
+                      <span
+                        title={`Settled in ${t.payoutRef}`}
+                        className="inline-flex items-center rounded-full bg-success/10 px-2 py-0.5 text-[11px] font-medium text-success"
+                      >
+                        Paid
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center rounded-full bg-surface-2 px-2 py-0.5 text-[11px] font-medium text-muted">
+                        Unpaid
+                      </span>
+                    )}
                   </td>
                 </tr>
               ))}
               {pageRows.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="px-5 py-10 text-center text-sm text-muted">
+                  <td colSpan={8} className="px-5 py-10 text-center text-sm text-muted">
                     {error
                       ? "Your transactions could not be loaded — see the message above."
                       : "No transactions match your filters."}

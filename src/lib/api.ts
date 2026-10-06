@@ -138,6 +138,14 @@ export function fetchCategories(signal?: AbortSignal): Promise<{ categories: Api
   return getJson<{ categories: ApiCategory[] }>("/categories", signal);
 }
 
+/** One product by the store's own id — used when a link names a product. */
+export function fetchProduct(
+  odooId: number,
+  signal?: AbortSignal,
+): Promise<{ product: ApiProduct; catalogue: CatalogueState }> {
+  return getJson<{ product: ApiProduct; catalogue: CatalogueState }>(`/products/${odooId}`, signal);
+}
+
 // ---------------------------------------------------------------------------
 // Authentication & Affiliate Program Approvals
 // ---------------------------------------------------------------------------
@@ -151,9 +159,6 @@ export interface AuthUser {
   status: "pending" | "approved" | "rejected" | "suspended" | "active";
   isMember: boolean;
   rejectionReason?: string | null;
-  promotionalChannel?: string | null;
-  channelUrl?: string | null;
-  audienceSize?: string | null;
   whyJoin?: string | null;
   affiliateId?: string | null;
   createdAt: string | null;
@@ -194,9 +199,6 @@ export function signupAffiliate(data: {
   email: string;
   password: string;
   phone?: string;
-  promotionalChannel: string;
-  channelUrl: string;
-  audienceSize: string;
   whyJoin: string;
 }): Promise<AuthResponse> {
   return postJson<AuthResponse>("/auth/signup", data);
@@ -227,6 +229,27 @@ export interface AffiliateEarning {
   earning: number;
   status: string;
   occurredAt: string | null;
+  /** The payout this was settled in, once one has settled it. */
+  payoutRef?: string | null;
+  /** Campaign commission on this order, paid on top of the markup. */
+  commission?: number;
+  /** Markup plus commission — what the affiliate is actually owed. */
+  totalDue?: number;
+  /** The goods on the order. Empty means the store did not report them. */
+  lines?: {
+    productId: number | null;
+    productTmplId: number | null;
+    name: string;
+    quantity: number;
+    unitPrice: number;
+    subtotal: number;
+    commission: number;
+    campaign: string | null;
+  }[];
+  /** Which link brought the sale in — the link, not the goods bought. */
+  sourceCode?: string | null;
+  sourceLabel?: string | null;
+  sourceKind?: "product" | "storewide" | null;
 }
 
 export function fetchAffiliateEarnings(): Promise<{ earnings: AffiliateEarning[] }> {
@@ -247,9 +270,6 @@ export interface AdminAffiliateItem {
   status: string;
   isMember: boolean;
   rejectionReason?: string | null;
-  promotionalChannel?: string | null;
-  channelUrl?: string | null;
-  audienceSize?: string | null;
   whyJoin?: string | null;
   affiliateRef?: string | null;
   odooAffiliateId?: number | null;
@@ -339,6 +359,202 @@ export function fetchAdminAffiliate(id: number): Promise<AdminAffiliateDetail> {
   );
 }
 
+// ---------------------------------------------------------------------------
+// Notifications
+// ---------------------------------------------------------------------------
+
+export interface AppNotice {
+  id: number;
+  /** Stable event name, e.g. "payout.paid" — drives the icon, not the wording. */
+  kind: string;
+  title: string;
+  body: string;
+  href: string | null;
+  read: boolean;
+  createdAt: string | null;
+}
+
+export function fetchNotifications(limit = 50): Promise<{
+  notifications: AppNotice[];
+  unread: number;
+}> {
+  const token = getStoredToken();
+  return getJson<{ notifications: AppNotice[]; unread: number }>(
+    `/notifications?limit=${limit}`,
+    undefined,
+    token ? { Authorization: `Bearer ${token}` } : undefined,
+  );
+}
+
+/** Omit `ids` to mark everything read. */
+export function markNotificationsRead(ids?: number[]): Promise<{ read: number; unread: number }> {
+  const token = getStoredToken();
+  return postJson<{ read: number; unread: number }>(
+    "/notifications/read",
+    { ids },
+    undefined,
+    token ? { Authorization: `Bearer ${token}` } : undefined,
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Payouts
+// ---------------------------------------------------------------------------
+
+export interface PayoutAccount {
+  /** As the bank reports it — not as the affiliate typed it. */
+  accountName: string;
+  bankName: string;
+  bankCode: string;
+  /** Never returned in full once saved. */
+  accountNumberLast4: string;
+  complete: boolean;
+}
+
+export interface Bank {
+  code: string;
+  name: string;
+}
+
+export function fetchBanks(): Promise<{ banks: Bank[] }> {
+  return getJson<{ banks: Bank[] }>("/banks", undefined, authHeader());
+}
+
+/** Ask the bank who owns this account. Saves nothing. */
+export function resolveAccountName(
+  data: { accountNumber: string; bankCode: string },
+  signal?: AbortSignal,
+): Promise<{ accountName: string }> {
+  return requestJson<{ accountName: string }>(
+    "POST", "/affiliate/payout-account/resolve", data, signal, authHeader(),
+  );
+}
+
+export interface PayoutBalance {
+  amount: number;
+  orderCount: number;
+  currency: string | null;
+  minimum: number;
+  canRequest: boolean;
+  /** Plain reasons a payout can't be requested yet, for showing as-is. */
+  blockedBy: string[];
+}
+
+export interface PayoutRecord {
+  id: string;
+  amount: number;
+  currency: string | null;
+  method: string;
+  status: string;
+  orderCount: number;
+  accountName: string;
+  bankName: string;
+  accountNumberLast4: string;
+  failureReason: string | null;
+  /** Paystack is holding this transfer until the code it sent is supplied. */
+  awaitingOtp: boolean;
+  /** Paystack's own word for where the transfer is, when one was used. */
+  providerStatus: string | null;
+  note: string | null;
+  requestedAt: string | null;
+  paidAt: string | null;
+  affiliateName?: string;
+  affiliateRef?: string;
+}
+
+function authHeader() {
+  const token = getStoredToken();
+  return token ? { Authorization: `Bearer ${token}` } : undefined;
+}
+
+export function fetchPayoutAccount(): Promise<{ account: PayoutAccount }> {
+  return getJson<{ account: PayoutAccount }>("/affiliate/payout-account", undefined, authHeader());
+}
+
+/**
+ * The account name is not sent: the server asks the bank and stores that
+ * answer, so what the browser believes about the name cannot decide it.
+ */
+export function savePayoutAccount(data: {
+  accountNumber: string;
+  bankCode: string;
+}): Promise<{ account: PayoutAccount }> {
+  return requestJson<{ account: PayoutAccount }>(
+    "PUT", "/affiliate/payout-account", data, undefined, authHeader(),
+  );
+}
+
+export function fetchPayouts(): Promise<{ payouts: PayoutRecord[]; balance: PayoutBalance | null }> {
+  return getJson<{ payouts: PayoutRecord[]; balance: PayoutBalance | null }>(
+    "/affiliate/payouts", undefined, authHeader(),
+  );
+}
+
+export function requestPayout(note = ""): Promise<{ payout: PayoutRecord }> {
+  return postJson<{ payout: PayoutRecord }>("/affiliate/payouts", { note }, undefined, authHeader());
+}
+
+export function fetchApprovableEarnings(): Promise<{ earnings: AdminEarning[]; holdDays: number }> {
+  return getJson<{ earnings: AdminEarning[]; holdDays: number }>(
+    "/admin/earnings/approvable", undefined, authHeader(),
+  );
+}
+
+export function approveEarnings(orderRefs?: string[]): Promise<{ approved: number }> {
+  return postJson<{ approved: number }>(
+    "/admin/earnings/approve", { orderRefs }, undefined, authHeader(),
+  );
+}
+
+export function fetchAdminPayouts(status = "all"): Promise<{ payouts: PayoutRecord[] }> {
+  return getJson<{ payouts: PayoutRecord[] }>(
+    `/admin/payouts?status=${encodeURIComponent(status)}`, undefined, authHeader(),
+  );
+}
+
+export function markPayoutPaid(reference: string, data: { reference?: string; note?: string }) {
+  return postJson<{ payout: PayoutRecord }>(
+    `/admin/payouts/${encodeURIComponent(reference)}/paid`, data, undefined, authHeader(),
+  );
+}
+
+/**
+ * Actually send the money. Unlike markPayoutPaid, this one moves it.
+ *
+ * It may come back with `awaitingOtp`, meaning Paystack has sent a code to
+ * the account owner and is holding the transfer until it is supplied.
+ */
+export function sendPayout(reference: string) {
+  return postJson<{ payout: PayoutRecord }>(
+    `/admin/payouts/${encodeURIComponent(reference)}/send`, {}, undefined, authHeader(),
+  );
+}
+
+export function confirmPayoutOtp(reference: string, otp: string) {
+  return postJson<{ payout: PayoutRecord }>(
+    `/admin/payouts/${encodeURIComponent(reference)}/confirm-otp`, { otp }, undefined, authHeader(),
+  );
+}
+
+export function resendPayoutOtp(reference: string) {
+  return postJson<{ sent: boolean }>(
+    `/admin/payouts/${encodeURIComponent(reference)}/resend-otp`, {}, undefined, authHeader(),
+  );
+}
+
+/** Make our record agree with Paystack's. Never sends anything. */
+export function reconcilePayout(reference: string) {
+  return postJson<{ payout: PayoutRecord }>(
+    `/admin/payouts/${encodeURIComponent(reference)}/reconcile`, {}, undefined, authHeader(),
+  );
+}
+
+export function markPayoutFailed(reference: string, reason: string) {
+  return postJson<{ payout: PayoutRecord }>(
+    `/admin/payouts/${encodeURIComponent(reference)}/failed`, { reason }, undefined, authHeader(),
+  );
+}
+
 export interface AdminEarningsPage {
   earnings: AdminEarning[];
   /** How many rows came back (the list is capped for the browser's sake). */
@@ -370,6 +586,8 @@ export interface AffiliateLinkData {
   url: string;
   targetType: string;
   productId: number | null;
+  /** Name of the product it lands on, looked up fresh; null for storewide. */
+  productName: string | null;
   markupPercent: number;
   active: boolean;
   synced: boolean;
@@ -381,10 +599,30 @@ export interface AffiliateLinkData {
   currency: string | null;
 }
 
-export function fetchAffiliateLinks(): Promise<{ links: AffiliateLinkData[] }> {
+export interface AffiliateLinksPage {
+  links: AffiliateLinkData[];
+  /** How many live links this affiliate holds, and the most they may have. */
+  used: number;
+  maxLinks: number;
+}
+
+export function fetchAffiliateLinks(): Promise<AffiliateLinksPage> {
   const token = getStoredToken();
-  return getJson<{ links: AffiliateLinkData[] }>(
+  return getJson<AffiliateLinksPage>(
     "/affiliate/links",
+    undefined,
+    token ? { Authorization: `Bearer ${token}` } : undefined,
+  );
+}
+
+/** Retire a link. The store is switched off first, so a retired code cannot
+ *  keep pricing a basket with nothing left to credit the sale to. */
+export function deleteAffiliateLink(backendRef: string): Promise<{ outcome: string }> {
+  const token = getStoredToken();
+  return requestJson<{ outcome: string }>(
+    "DELETE",
+    `/affiliate/links/${encodeURIComponent(backendRef)}`,
+    undefined,
     undefined,
     token ? { Authorization: `Bearer ${token}` } : undefined,
   );
@@ -393,6 +631,8 @@ export function fetchAffiliateLinks(): Promise<{ links: AffiliateLinkData[] }> {
 export function createAffiliateLink(data: {
   markupPercent: number;
   label: string;
+  /** Where the link lands. Omit for a storewide link. */
+  productId?: number;
 }): Promise<{ link: AffiliateLinkData }> {
   const token = getStoredToken();
   return postJson<{ link: AffiliateLinkData }>(
@@ -403,3 +643,102 @@ export function createAffiliateLink(data: {
   );
 }
 
+
+/**
+ * The limits the programme actually enforces, as the server holds them.
+ *
+ * Fetched rather than hardcoded so that help text and forms quote the cap
+ * that is really applied — a dashboard stating 10% while the server clamps
+ * to 8% would reject prices it had just told the affiliate to use.
+ */
+export interface AffiliateRules {
+  maxMarkupPercent: number;
+  maxLinks: number;
+  minPayout: number;
+  holdDays: number;
+}
+
+export function fetchAffiliateRules(): Promise<AffiliateRules> {
+  return getJson<AffiliateRules>("/affiliate/rules", undefined, authHeader());
+}
+
+/**
+ * A campaign pays an affiliate extra for selling particular products, on
+ * top of the markup they already keep.
+ */
+export interface CampaignProductRef {
+  productId: number | null;
+  productTmplId: number | null;
+  name: string;
+}
+
+export interface Campaign {
+  id: number;
+  name: string;
+  description: string;
+  /** "percent" of the line's value, or "fixed" naira per unit sold. */
+  rewardType: "percent" | "fixed";
+  rewardValue: number;
+  startsAt: string | null;
+  endsAt: string | null;
+  /** Switched on by an admin. */
+  active: boolean;
+  /** Switched on AND inside its dates — i.e. paying out right now. */
+  live: boolean;
+  productCount: number;
+  products: CampaignProductRef[];
+}
+
+export interface CampaignInput {
+  name: string;
+  description?: string;
+  rewardType: "percent" | "fixed";
+  rewardValue: number;
+  startsAt?: string | null;
+  endsAt?: string | null;
+  active?: boolean;
+  products: CampaignProductRef[];
+}
+
+export function fetchAdminCampaigns(): Promise<{ campaigns: Campaign[] }> {
+  return getJson<{ campaigns: Campaign[] }>("/admin/campaigns", undefined, authHeader());
+}
+
+export function createCampaign(data: CampaignInput): Promise<{ campaign: Campaign }> {
+  return postJson<{ campaign: Campaign }>("/admin/campaigns", data, undefined, authHeader());
+}
+
+export function updateCampaign(id: number, data: CampaignInput): Promise<{ campaign: Campaign }> {
+  return requestJson<{ campaign: Campaign }>(
+    "PUT", `/admin/campaigns/${id}`, data, undefined, authHeader(),
+  );
+}
+
+/** Switches a campaign off. Never deletes it — earnings point at it. */
+export function stopCampaign(id: number): Promise<{ campaign: Campaign }> {
+  return requestJson<{ campaign: Campaign }>(
+    "DELETE", `/admin/campaigns/${id}`, undefined, undefined, authHeader(),
+  );
+}
+
+/** What an affiliate can earn extra on right now. */
+export function fetchLiveCampaigns(): Promise<{ campaigns: Campaign[] }> {
+  return getJson<{ campaigns: Campaign[] }>("/affiliate/campaigns", undefined, authHeader());
+}
+
+/** What a campaign pays on one unit of a product, at that product's price. */
+export interface ProductReward {
+  /** Naira on one unit — already worked out, so the card never guesses. */
+  amount: number;
+  rewardType: "percent" | "fixed";
+  rewardValue: number;
+  campaign: string;
+  currency: string | null;
+}
+
+/** Keyed by product id as a string, since it arrives as a JSON object. */
+export function fetchProductRewards(): Promise<{ rewards: Record<string, ProductReward> }> {
+  return getJson<{ rewards: Record<string, ProductReward> }>(
+    "/affiliate/product-rewards", undefined, authHeader(),
+  );
+}
