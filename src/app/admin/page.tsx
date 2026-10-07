@@ -43,8 +43,10 @@ export default function AdminOverviewPage() {
 
   const sumOf = (...states: string[]) =>
     states.reduce((sum, state) => sum + (totals[state]?.earning ?? 0), 0);
-  const pending = sumOf("pending");
-  const approved = sumOf("approved", "payable");
+  // "pending" and "approved" are the old words for earned; rows recorded
+  // before the change may still carry them.
+  const earned = sumOf("completed", "pending", "approved", "payable");
+  const reversed = sumOf("reversed");
   const paid = sumOf("paid");
   const currency = earnings.find((row) => row.currency)?.currency ?? null;
   // Unknown until it loads, rather than a confident zero.
@@ -65,16 +67,16 @@ export default function AdminOverviewPage() {
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <StatTile
           label="Recorded Earnings"
-          value={show(formatCurrency(pending + approved + paid, currency))}
+          value={show(formatCurrency(earned + paid, currency))}
           icon={Wallet}
           tone="up"
-          info="Everything affiliates have earned across the platform — pending, approved and paid added together. Earnings reversed by a cancellation or refund are left out."
+          info="Everything affiliates have earned across the platform, paid and unpaid together. Earnings reversed by a cancellation or refund are left out."
         />
         <StatTile
-          label="Pending Earnings"
-          value={show(formatCurrency(pending, currency))}
+          label="Owed to affiliates"
+          value={show(formatCurrency(earned, currency))}
           icon={Wallet}
-          info="The part of that total still settling. It is not payable until it is approved, which is what the Payouts page is for."
+          info="Earned and not yet paid out. This is what affiliates can request from the Payouts page."
         />
         <StatTile
           label="Affiliates"
@@ -121,19 +123,18 @@ export default function AdminOverviewPage() {
           <CardHeader title="Earnings status" subtitle="Store-reported records" />
           <div className="grid grid-cols-1 gap-3 p-4 sm:grid-cols-3 sm:p-5">
             <AmountTile
-              label="Pending"
-              amount={pending}
-              tone="pending"
-              currency={currency}
-              info="Owed to affiliates from paid orders, but still inside the settling window. Nothing here can be paid out yet."
-            />
-            <AmountTile
-              label="Approved"
-              amount={approved}
+              label="Earned"
+              amount={earned}
               tone="approved"
               currency={currency}
-              info="Cleared for payment. This is what affiliates can request, and what a payout run draws on."
-              note={approved ? undefined : "No approval step yet — earnings stay pending."}
+              info="Owed to affiliates from orders the store has confirmed as paid. This is what payout requests draw on."
+            />
+            <AmountTile
+              label="Reversed"
+              amount={reversed}
+              tone="reversed"
+              currency={currency}
+              info="From orders later cancelled or refunded. Not owed to anyone, and excluded from every other figure."
             />
             <AmountTile
               label="Paid"

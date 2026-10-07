@@ -59,15 +59,13 @@ export default function DashboardPage() {
     commissions: active.reduce((sum, row) => sum + row.earning, 0),
     orderValue: active.length ? active.reduce((sum, row) => sum + row.amountTotal, 0) / active.length : 0,
   }), [active]);
-  // Named statuses only — a status this page hasn't been taught about must not
-  // quietly land in "Approved" and read as money that is nearly payable.
+  // A confirmed sale is money earned. "pending" and "approved" are the old
+  // words for it and may still arrive on rows recorded before the change.
   const breakdown = useMemo(() => active.reduce((result, row) => {
-    if (row.status === "pending") result.pending += row.earning;
-    else if (row.status === "paid") result.paid += row.earning;
-    else if (row.status === "approved" || row.status === "payable") result.approved += row.earning;
-    else result.other += row.earning;
+    if (row.status === "paid") result.paid += row.earning;
+    else result.earned += row.earning;
     return result;
-  }, { pending: 0, approved: 0, paid: 0, other: 0 }), [active]);
+  }, { earned: 0, paid: 0 }), [active]);
   const trend = useMemo(() => {
     const points = new Map<string, { date: string; sales: number; commissions: number }>();
     active.forEach((row) => {
@@ -119,19 +117,18 @@ export default function DashboardPage() {
         <CardHeader title="Earnings Status" subtitle="Based on backend-reported earning records" />
         <div className="grid grid-cols-1 gap-3 p-4 sm:grid-cols-3 sm:p-5">
           <AmountTile
-            label="Pending"
-            amount={breakdown.pending}
-            tone="pending"
-            currency={currency}
-            info="Earned from orders the store has confirmed as paid, but still settling. Earnings wait here until the order is old enough to be unlikely to come back."
-          />
-          <AmountTile
-            label="Approved"
-            amount={breakdown.approved}
+            label="Earned"
+            amount={breakdown.earned}
             tone="approved"
             currency={currency}
-            info="Cleared and counted as yours. Once your approved total reaches the minimum, you can request a payout from the Earnings page."
-            note={breakdown.approved ? undefined : "Nothing is approved yet — earnings stay pending for now."}
+            info="Money from orders the store has confirmed as paid. It is yours; request a payout from the Earnings page once it reaches the minimum."
+          />
+          <AmountTile
+            label="Reversed"
+            amount={reversed}
+            tone="reversed"
+            currency={currency}
+            info="From orders later cancelled or refunded. That money never arrived, so it is left out of every other figure."
           />
           <AmountTile
             label="Paid"
@@ -139,20 +136,11 @@ export default function DashboardPage() {
             tone="paid"
             currency={currency}
             info="Already transferred to your bank account. This money has left CyberVilla."
-            note={breakdown.paid ? undefined : "Payouts aren't available yet."}
+            note={breakdown.paid ? undefined : "Nothing paid out yet."}
           />
         </div>
-        {(reversed > 0 || breakdown.other > 0 || undated > 0) && (
+        {undated > 0 && (
           <div className="space-y-1 border-t border-border px-4 py-3 text-xs text-muted sm:px-5">
-            {reversed > 0 && (
-              <p>
-                {formatCurrency(reversed, currency)} from cancelled or refunded orders is excluded from the
-                figures above.
-              </p>
-            )}
-            {breakdown.other > 0 && (
-              <p>{formatCurrency(breakdown.other, currency)} is in a status this page does not recognise.</p>
-            )}
             {undated > 0 && (
               <p>
                 {undated} earning{undated === 1 ? "" : "s"} without a date can&apos;t be placed in a time range
