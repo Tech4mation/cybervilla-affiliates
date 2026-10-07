@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AlertCircle, Clock, CheckCircle2, ArrowRight } from "lucide-react";
 import { signinUser, setStoredToken, ApiError, AuthUser } from "@/lib/api";
+import { PasswordInput } from "@/components/ui/PasswordInput";
 
 export default function SignInPage() {
   const router = useRouter();
@@ -127,12 +128,12 @@ export default function SignInPage() {
 
                 <div>
                   <label className="block text-xs font-medium text-foreground mb-1">Password</label>
-                  <input
-                    type="password"
+                  <PasswordInput
                     required
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="••••••••"
+                    autoComplete="current-password"
                     className="w-full rounded-xl border border-border bg-surface-2 px-3.5 py-2.5 text-sm text-foreground placeholder:text-muted focus:border-accent focus:outline-none transition"
                   />
                 </div>

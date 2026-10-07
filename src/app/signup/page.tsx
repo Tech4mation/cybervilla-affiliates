@@ -5,6 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { AlertCircle, Clock, ArrowRight } from "lucide-react";
 import { signupAffiliate, setStoredToken, ApiError } from "@/lib/api";
+import { PasswordInput } from "@/components/ui/PasswordInput";
 
 export default function SignUpPage() {
   const [name, setName] = useState("");
@@ -165,13 +166,13 @@ export default function SignUpPage() {
 
                 <div>
                   <label className="block text-xs font-medium text-foreground mb-1">Password *</label>
-                  <input
-                    type="password"
+                  <PasswordInput
                     required
                     minLength={6}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="At least 6 characters"
+                    autoComplete="new-password"
                     className="w-full rounded-xl border border-border bg-surface-2 px-3.5 py-2.5 text-sm text-foreground placeholder:text-muted focus:border-accent focus:outline-none transition"
                   />
                 </div>
