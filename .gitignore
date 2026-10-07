@@ -32,8 +32,6 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 # Restored: these were lost and .env.local became committable on a public repo.
-.env
-.env.*
 
 # vercel
 .vercel
