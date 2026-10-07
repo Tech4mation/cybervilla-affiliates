@@ -7,16 +7,13 @@ import { Badge } from "@/components/ui/Badge";
 import { Select } from "@/components/ui/Toolbar";
 import { Modal } from "@/components/ui/Modal";
 import {
-  approveEarnings,
   confirmPayoutOtp,
   fetchAdminPayouts,
-  fetchApprovableEarnings,
   markPayoutFailed,
   markPayoutPaid,
   reconcilePayout,
   resendPayoutOtp,
   sendPayout,
-  type AdminEarning,
   type PayoutRecord,
 } from "@/lib/api";
 import { formatCurrency, formatDate } from "@/lib/utils";
@@ -25,8 +22,6 @@ const STATUSES = ["all", "requested", "awaiting_otp", "processing", "paid", "fai
 
 export default function AdminPayoutsPage() {
   const [payouts, setPayouts] = useState<PayoutRecord[]>([]);
-  const [approvable, setApprovable] = useState<AdminEarning[]>([]);
-  const [holdDays, setHoldDays] = useState<number | null>(null);
   const [status, setStatus] = useState("all");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -47,11 +42,9 @@ export default function AdminPayoutsPage() {
   const [otpNote, setOtpNote] = useState<string | null>(null);
 
   function load(forStatus = status) {
-    return Promise.all([fetchAdminPayouts(forStatus), fetchApprovableEarnings()])
-      .then(([p, e]) => {
+    return fetchAdminPayouts(forStatus)
+      .then((p) => {
         setPayouts(p.payouts);
-        setApprovable(e.earnings);
-        setHoldDays(e.holdDays);
         setError(null);
       })
       .catch((reason) =>
@@ -65,20 +58,6 @@ export default function AdminPayoutsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status]);
 
-  const approvableTotal = approvable.reduce((sum, e) => sum + e.earning, 0);
-  const currency = approvable.find((e) => e.currency)?.currency ?? null;
-
-  async function handleApproveAll() {
-    setBusy("approve");
-    try {
-      await approveEarnings();
-      await load();
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "Could not approve those earnings.");
-    } finally {
-      setBusy(null);
-    }
-  }
 
   async function handleSend() {
     if (!sending) return;
@@ -177,9 +156,9 @@ export default function AdminPayoutsPage() {
   return (
     <div className="space-y-5">
       <p className="text-sm text-muted">
-        Approve earnings once their orders are settled. Affiliates then request a payout, and you
-        release it here: <strong className="font-medium text-foreground">Send now</strong> moves the
-        money through Paystack, which asks for a confirmation code before it goes.{" "}
+        Affiliates request a payout from what they have earned; you vet it and release it here.{" "}
+        <strong className="font-medium text-foreground">Send now</strong> moves the money through
+        Paystack, which asks for a confirmation code before it goes.{" "}
         <strong className="font-medium text-foreground">Record manual</strong> is only for a transfer
         you made from the bank yourself.
       </p>
@@ -187,50 +166,6 @@ export default function AdminPayoutsPage() {
       {error && (
         <div className="rounded-lg border border-danger/30 bg-danger/10 p-3 text-sm text-danger">{error}</div>
       )}
-
-      <Card>
-        <CardHeader
-          title="Earnings ready to approve"
-          subtitle={
-            holdDays === null
-              ? "Loading…"
-              : holdDays === 0
-                ? "Paid orders not yet approved — no waiting period is set"
-                : `Orders older than ${holdDays} ${holdDays === 1 ? "day" : "days"}, not yet approved`
-          }
-          action={
-            approvable.length > 0 ? (
-              <button
-                onClick={handleApproveAll}
-                disabled={busy === "approve"}
-                className="inline-flex items-center gap-1.5 rounded-lg bg-accent px-3 py-1.5 text-xs font-semibold text-black hover:bg-accent-strong disabled:opacity-50"
-              >
-                {busy === "approve" ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />}
-                Approve all {approvable.length}
-              </button>
-            ) : undefined
-          }
-        />
-        <div className="p-4 sm:p-5">
-          {loading ? (
-            <p className="text-sm text-muted">Loading…</p>
-          ) : approvable.length === 0 ? (
-            <p className="text-sm text-muted">
-              Nothing is ready yet. Earnings become approvable once their order has had time to settle.
-            </p>
-          ) : (
-            <p className="text-sm text-foreground">
-              <span className="text-lg font-semibold tabular-nums">
-                {formatCurrency(approvableTotal, currency)}
-              </span>{" "}
-              <span className="text-muted">
-                across {approvable.length} order{approvable.length === 1 ? "" : "s"}. Approving makes this
-                money payable to the affiliates who earned it.
-              </span>
-            </p>
-          )}
-        </div>
-      </Card>
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
         <Select value={status} onChange={setStatus} options={STATUSES} />

@@ -435,6 +435,9 @@ export interface PayoutBalance {
   orderCount: number;
   currency: string | null;
   minimum: number;
+  /** Earned but still inside the waiting period after a sale. */
+  waiting: number;
+  holdDays: number;
   canRequest: boolean;
   /** Plain reasons a payout can't be requested yet, for showing as-is. */
   blockedBy: string[];

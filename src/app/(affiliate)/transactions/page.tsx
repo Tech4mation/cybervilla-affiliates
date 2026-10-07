@@ -13,7 +13,7 @@ type SortKey = "date" | "amount" | "earning";
 
 // Exactly the states the backend can report (see Earning.status). Offering
 // anything else gives a filter that silently never matches.
-const STATUSES = ["All Statuses", "pending", "approved", "payable", "paid", "reversed"];
+const STATUSES = ["All Statuses", "completed", "paid", "reversed"];
 // "Source" means which link brought the sale in, so the choices are the
 // kinds of link there are — not the products, which the store never tells us.
 const SOURCES = ["All Sources", "Storewide links", "Product links"];

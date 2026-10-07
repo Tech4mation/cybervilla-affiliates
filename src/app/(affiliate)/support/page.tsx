@@ -39,11 +39,11 @@ function faqSections(rules: AffiliateRules): { title: string; faqs: Faq[] }[] {
   // which case "the order is 0 days old" would be gibberish.
   const waiting =
     rules.holdDays > 0
-      ? `An earning can only be approved once the order is ${rules.holdDays} ` +
+      ? `Money from a sale can be paid out once the order is ${rules.holdDays} ` +
         `${rules.holdDays === 1 ? "day" : "days"} old, because until then the customer ` +
         "could still cancel or return it."
-      : "An earning can be approved as soon as the order is paid — there is no waiting " +
-        "period at the moment.";
+      : "Money from a sale can be paid out straight away — there is no waiting period " +
+        "at the moment.";
   return [
     {
       title: "Links and pricing",
@@ -86,7 +86,7 @@ function faqSections(rules: AffiliateRules): { title: string; faqs: Faq[] }[] {
         {
           id: "statuses",
           q: "What do the earning statuses mean?",
-          a: "Pending means the store has reported a paid order and it is waiting out the review window. Approved means it has cleared that window and been checked, so it is ready to be paid. Paid means it was included in a payout that has been sent to you. Reversed means the order was later cancelled or refunded, so that money is not yours and is left out of your totals.",
+          a: "Completed means the store has confirmed the customer paid, so the money is yours. Paid means it was included in a payout that has been sent to your bank. Reversed means the order was later cancelled or refunded, so that money is not yours and is left out of your totals.",
         },
         {
           id: "which-link",
@@ -106,12 +106,12 @@ function faqSections(rules: AffiliateRules): { title: string; faqs: Faq[] }[] {
         {
           id: "when-paid",
           q: "When do I get paid?",
-          a: `There are two steps. ${waiting} Then, once your approved earnings add up to at least ${minimum}, you can request a payout from your Earnings page. We send it to your bank account by transfer and record it here once it has gone out. Payouts are not automatic and not on a fixed date — you ask, and we send.`,
+          a: `${waiting} Once your earnings add up to at least ${minimum}, you can request a payout from your Earnings page. We send it to your bank account by transfer and record it here once it has gone out. Payouts are not automatic and not on a fixed date — you ask, and we send.`,
         },
         {
           id: "payout-blocked",
           q: "Why can't I request a payout yet?",
-          a: `Your Earnings page gives you the exact reason. It is normally one of four: no approved earnings yet, an approved balance still under the ${minimum} minimum, no bank account saved, or a payout already in progress. Anything under the minimum is not lost — it rolls over to your next payout.`,
+          a: `Your Earnings page gives you the exact reason. It is normally one of four: nothing earned yet, a balance still under the ${minimum} minimum, no bank account saved, or a payout already in progress. Anything under the minimum is not lost — it rolls over to your next payout.`,
         },
         {
           id: "bank-details",
@@ -121,7 +121,7 @@ function faqSections(rules: AffiliateRules): { title: string; faqs: Faq[] }[] {
         {
           id: "payout-failed",
           q: "What if a payout fails?",
-          a: "It is marked as failed with the reason, which is usually bank details that do not match. The earnings in it go straight back to approved, so they are included the next time you request one. The failed attempt stays in your payout history so there is a record of what happened.",
+          a: "It is marked as failed with the reason, which is usually bank details that do not match. The earnings in it become payable again, so they are included the next time you request one. The failed attempt stays in your payout history so there is a record of what happened.",
         },
       ],
     },
@@ -131,7 +131,7 @@ function faqSections(rules: AffiliateRules): { title: string; faqs: Faq[] }[] {
         {
           id: "notifications",
           q: "How will I know when something happens?",
-          a: "The bell at the top of the page. You will get a notice when your account is approved, when a sale earns you money, when an earning is approved, when a payout is sent or fails, and if one of your links stops working. There are no email alerts yet, so the bell is the place to check.",
+          a: "The bell at the top of the page. You will get a notice when your account is approved, when a sale earns you money, when a campaign starts, when a payout is sent or fails, and if one of your links stops working. There are no email alerts yet, so the bell is the place to check.",
         },
       ],
     },

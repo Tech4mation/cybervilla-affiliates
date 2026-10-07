@@ -117,14 +117,15 @@ export default function EarningsPage() {
       earnings.reduce(
         (acc, e) => {
           const due = e.totalDue ?? e.earning;
-          if (e.status === "pending") acc.pending += due;
-          else if (e.status === "approved" || e.status === "payable") acc.approved += due;
-          else if (e.status === "paid") acc.paid += due;
+          // "pending" and "approved" were folded into "completed"; older
+          // rows may still carry the old words until they are migrated.
+          if (e.status === "paid") acc.paid += due;
           else if (e.status === "reversed") acc.reversed += due;
+          else acc.completed += due;
           if (e.status !== "reversed") acc.commission += e.commission ?? 0;
           return acc;
         },
-        { pending: 0, approved: 0, paid: 0, reversed: 0, commission: 0 },
+        { completed: 0, paid: 0, reversed: 0, commission: 0 },
       ),
     [earnings],
   );
@@ -169,9 +170,8 @@ export default function EarningsPage() {
         `Affiliate: ${user.name} (${user.id})`,
         `Generated: ${new Date().toISOString().slice(0, 10)}`,
         "",
-        `Paid:     ${formatCurrency(breakdown.paid, currency)}`,
-        `Approved: ${formatCurrency(breakdown.approved, currency)}`,
-        `Pending:  ${formatCurrency(breakdown.pending, currency)}`,
+        `Earned:   ${formatCurrency(breakdown.completed, currency)}`,
+        `Paid out: ${formatCurrency(breakdown.paid, currency)}`,
         `Reversed: ${formatCurrency(breakdown.reversed, currency)}`,
       ].join("\n"),
       `cybervilla-earnings-statement-${year}.txt`,
@@ -207,25 +207,21 @@ export default function EarningsPage() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <AmountTile
-          label="Pending"
-          amount={breakdown.pending}
-          tone="pending"
-          currency={currency}
-          note={breakdown.pending ? "Recorded from paid orders." : undefined}
-          info="Earned from orders the store has confirmed as paid, but still settling. Earnings wait here until the order is old enough to be unlikely to come back."
-        />
-        <AmountTile
-          label="Approved"
-          amount={breakdown.approved}
+          label="Earned"
+          amount={breakdown.completed}
           tone="approved"
           currency={currency}
-          note={breakdown.approved ? undefined : "Nothing approved yet."}
-          info="Cleared and counted as yours. This is the money a payout request draws on, once it reaches the minimum shown below."
+          note={
+            balance && balance.waiting > 0
+              ? `${formatCurrency(balance.waiting, currency)} still settling`
+              : undefined
+          }
+          info="Money from orders the store has confirmed as paid. It is yours; request a payout once it reaches the minimum."
         />
         <AmountTile
-          label="Paid"
+          label="Paid out"
           amount={breakdown.paid}
           tone="paid"
           currency={currency}
