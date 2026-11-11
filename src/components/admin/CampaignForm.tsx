@@ -1,25 +1,18 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Check, Loader2, Plus, Search, Tag, X } from "lucide-react";
-import { Card, CardHeader } from "@/components/ui/Card";
-import { Badge } from "@/components/ui/Badge";
-import { Modal } from "@/components/ui/Modal";
+import { Check, Loader2, Search, X } from "lucide-react";
 import {
-  createCampaign,
-  fetchAdminCampaigns,
   fetchProducts,
-  stopCampaign,
-  updateCampaign,
   type ApiProduct,
   type Campaign,
   type CampaignInput,
   type CampaignProductRef,
 } from "@/lib/api";
-import { cn, formatCurrency, formatDate } from "@/lib/utils";
+import { cn, formatCurrency } from "@/lib/utils";
 
 /** A blank campaign, for the "new" form. */
-function emptyDraft(): CampaignInput {
+export function emptyDraft(): CampaignInput {
   return {
     name: "",
     description: "",
@@ -32,7 +25,8 @@ function emptyDraft(): CampaignInput {
   };
 }
 
-function toDraft(campaign: Campaign): CampaignInput {
+/** The same campaign, as the form wants it. */
+export function toDraft(campaign: Campaign): CampaignInput {
   return {
     name: campaign.name,
     description: campaign.description,
@@ -46,195 +40,7 @@ function toDraft(campaign: Campaign): CampaignInput {
   };
 }
 
-export default function AdminCampaignsPage() {
-  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-
-  const [editing, setEditing] = useState<Campaign | null>(null);
-  const [draft, setDraft] = useState<CampaignInput | null>(null);
-  const [formError, setFormError] = useState<string | null>(null);
-  const [stopping, setStopping] = useState<Campaign | null>(null);
-
-  function load() {
-    return fetchAdminCampaigns()
-      .then(({ campaigns }) => {
-        setCampaigns(campaigns);
-        setError(null);
-      })
-      .catch((reason) =>
-        setError(reason instanceof Error ? reason.message : "Could not load campaigns."),
-      )
-      .finally(() => setLoading(false));
-  }
-
-  useEffect(() => {
-    void load();
-  }, []);
-
-  async function handleSave() {
-    if (!draft) return;
-    setBusy(true);
-    setFormError(null);
-    try {
-      if (editing) await updateCampaign(editing.id, draft);
-      else await createCampaign(draft);
-      setDraft(null);
-      setEditing(null);
-      await load();
-    } catch (reason) {
-      // The server's wording is the useful part here — it says which rule
-      // was broken — so it is shown as-is, in the form, not as a banner.
-      setFormError(reason instanceof Error ? reason.message : "Could not save that campaign.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function handleStop() {
-    if (!stopping) return;
-    setBusy(true);
-    try {
-      await stopCampaign(stopping.id);
-      setStopping(null);
-      await load();
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "Could not stop that campaign.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  if (loading) return <div className="p-8 text-center text-sm text-muted">Loading campaigns…</div>;
-
-  return (
-    <div className="space-y-5">
-      <p className="text-sm text-muted">
-        A campaign pays affiliates extra for selling particular products. It is paid{" "}
-        <strong className="font-medium text-foreground">on top of</strong> the markup they already
-        keep, out of CyberVilla&apos;s margin — so only put products here you can afford to give more away on.
-      </p>
-
-      {error && (
-        <div className="rounded-lg border border-danger/30 bg-danger/10 p-3 text-sm text-danger">{error}</div>
-      )}
-
-      <div className="flex justify-end">
-        <button
-          onClick={() => {
-            setEditing(null);
-            setDraft(emptyDraft());
-            setFormError(null);
-          }}
-          className="inline-flex items-center gap-1.5 rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-black hover:bg-accent-strong"
-        >
-          <Plus size={15} /> New campaign
-        </button>
-      </div>
-
-      <Card>
-        <CardHeader
-          title="Campaigns"
-          subtitle={`${campaigns.filter((c) => c.live).length} running now, ${campaigns.length} in total`}
-        />
-        <div className="divide-y divide-border">
-          {campaigns.length === 0 && (
-            <p className="p-10 text-center text-sm text-muted">
-              No campaigns yet. Affiliates earn their markup regardless; a campaign adds more on
-              chosen products.
-            </p>
-          )}
-          {campaigns.map((c) => (
-            <div key={c.id} className="flex flex-wrap items-start gap-3 p-4 sm:p-5">
-              <span className="rounded-lg bg-surface-2 p-2 text-muted">
-                <Tag size={16} />
-              </span>
-              <div className="min-w-0 flex-1">
-                <div className="flex flex-wrap items-center gap-2">
-                  <p className="text-sm font-medium text-foreground">{c.name}</p>
-                  <Badge status={c.live ? "approved" : "pending"}>
-                    {c.live ? "Running" : c.active ? "Scheduled or ended" : "Stopped"}
-                  </Badge>
-                </div>
-                <p className="mt-0.5 text-sm text-accent">
-                  {c.rewardType === "percent"
-                    ? `${c.rewardValue}% of each sale`
-                    : `${formatCurrency(c.rewardValue)} per item`}{" "}
-                  <span className="text-muted">
-                    · {c.productCount} product{c.productCount === 1 ? "" : "s"}
-                  </span>
-                </p>
-                {c.description && <p className="mt-1 text-xs text-muted">{c.description}</p>}
-                <p className="mt-1 text-[11px] text-muted">
-                  {c.startsAt ? `From ${formatDate(c.startsAt)}` : "No start date"}
-                  {" · "}
-                  {c.endsAt ? `until ${formatDate(c.endsAt)}` : "no end date"}
-                </p>
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => {
-                    setEditing(c);
-                    setDraft(toDraft(c));
-                    setFormError(null);
-                  }}
-                  className="rounded-md border border-border px-2.5 py-1.5 text-xs font-medium text-foreground hover:bg-surface-2"
-                >
-                  Edit
-                </button>
-                {c.active && (
-                  <button
-                    onClick={() => setStopping(c)}
-                    className="rounded-md border border-border px-2.5 py-1.5 text-xs font-medium text-muted hover:border-danger hover:text-danger"
-                  >
-                    Stop
-                  </button>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
-      </Card>
-
-      <Modal
-        open={Boolean(draft)}
-        onClose={() => setDraft(null)}
-        title={editing ? `Edit ${editing.name}` : "New campaign"}
-      >
-        {draft && (
-          <CampaignForm
-            draft={draft}
-            onChange={setDraft}
-            onSave={handleSave}
-            busy={busy}
-            error={formError}
-            editing={Boolean(editing)}
-          />
-        )}
-      </Modal>
-
-      <Modal open={Boolean(stopping)} onClose={() => setStopping(null)} title="Stop this campaign">
-        <div className="space-y-3">
-          <p className="text-sm text-foreground">{stopping?.name}</p>
-          <p className="text-xs text-muted">
-            New sales stop earning the extra immediately. Commission already earned is untouched and
-            will still be paid — the campaign stays on record so those earnings can name it.
-          </p>
-          <button
-            onClick={handleStop}
-            disabled={busy}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-danger px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
-          >
-            {busy && <Loader2 size={14} className="animate-spin" />} Stop it
-          </button>
-        </div>
-      </Modal>
-    </div>
-  );
-}
-
-function CampaignForm({
+export function CampaignForm({
   draft,
   onChange,
   onSave,
@@ -351,7 +157,7 @@ function CampaignForm({
 }
 
 /** Search the catalogue and build the list of products a campaign rewards. */
-function ProductChooser({
+export function ProductChooser({
   chosen,
   onChange,
 }: {
