@@ -1,4 +1,4 @@
-import { LayoutDashboard, Users, Receipt, Wallet, Package, Tag, Bell, type LucideIcon } from "lucide-react";
+import { LayoutDashboard, Users, Receipt, Wallet, Tag, Bell, type LucideIcon } from "lucide-react";
 
 export interface NavItem {
   label: string;
@@ -11,7 +11,6 @@ export const ADMIN_NAV_ITEMS: NavItem[] = [
   { label: "Affiliates", href: "/admin/affiliates", icon: Users },
   { label: "Transactions", href: "/admin/transactions", icon: Receipt },
   { label: "Payouts", href: "/admin/payouts", icon: Wallet },
-  { label: "Products & Commissions", href: "/admin/products", icon: Package },
-  { label: "Campaigns", href: "/admin/campaigns", icon: Tag },
+  { label: "Products & Campaigns", href: "/admin/products", icon: Tag },
   { label: "Notifications", href: "/admin/notifications", icon: Bell },
 ];
