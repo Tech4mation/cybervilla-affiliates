@@ -200,8 +200,44 @@ export function signupAffiliate(data: {
   password: string;
   phone?: string;
   whyJoin: string;
+  /** The invite code of whoever brought them in, if anyone. */
+  referralCode?: string;
 }): Promise<AuthResponse> {
   return postJson<AuthResponse>("/auth/signup", data);
+}
+
+/** Whether an invite code is real, and whose (first name only). Public. */
+export function checkReferralCode(code: string): Promise<{ valid: boolean; code?: string; inviter?: string }> {
+  return getJson(`/auth/referral/${encodeURIComponent(code.trim())}`);
+}
+
+export interface Recruit {
+  affiliateId: string | null;
+  userId: number | null;
+  name: string;
+  /** pending | approved | rejected | suspended */
+  status: string;
+  joinedAt: string | null;
+  /** Completed sales the recruit has made. */
+  sales: number;
+  /** What this recruit's sales have earned the inviter. Never the recruit's own earnings. */
+  bonusEarned: number;
+}
+
+export interface ReferralSummary {
+  code: string | null;
+  ratePercent: number;
+  recruits: Recruit[];
+  totals: { recruits: number; active: number; sales: number; bonusEarned: number };
+}
+
+export function fetchReferrals(): Promise<ReferralSummary> {
+  const token = getStoredToken();
+  return getJson<ReferralSummary>(
+    "/affiliate/referrals",
+    undefined,
+    token ? { Authorization: `Bearer ${token}` } : undefined,
+  );
 }
 
 export function signinUser(data: {
@@ -233,8 +269,15 @@ export interface AffiliateEarning {
   payoutRef?: string | null;
   /** Campaign commission on this order, paid on top of the markup. */
   commission?: number;
-  /** Markup plus commission — what the affiliate is actually owed. */
+  /** Markup plus commission plus referral bonus — what the affiliate is actually owed. */
   totalDue?: number;
+  /** "sale": the affiliate's own order. "referral": a bonus from a recruit's sale. */
+  kind?: "sale" | "referral";
+  /** Referral bonus on this row (0 on sales). */
+  bonus?: number;
+  bonusPercent?: number | null;
+  /** On a referral row: the recruit who made the sale. */
+  fromAffiliate?: string | null;
   /** The goods on the order. Empty means the store did not report them. */
   lines?: {
     productId: number | null;
@@ -275,6 +318,10 @@ export interface AdminAffiliateItem {
   odooAffiliateId?: number | null;
   synced: boolean;
   joinedAt: string | null;
+  /** Who invited this affiliate, if anyone. */
+  invitedBy?: { userId: number | null; affiliateId: string | null; name: string } | null;
+  recruitCount?: number;
+  referralCode?: string | null;
 }
 
 export interface AdminEarning {
@@ -286,6 +333,11 @@ export interface AdminEarning {
   earning: number;
   status: string;
   occurredAt: string | null;
+  /** Markup + campaign + referral bonus: what is owed on the row. */
+  totalDue?: number;
+  kind?: "sale" | "referral";
+  bonus?: number;
+  fromAffiliate?: string | null;
 }
 
 export interface AdminAffiliateDetail {
@@ -303,6 +355,7 @@ export interface AdminAffiliateDetail {
     createdAt: string | null;
   }>;
   earnings: AdminEarning[];
+  referrals?: ReferralSummary | null;
 }
 
 export function fetchAdminAffiliates(

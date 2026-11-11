@@ -8,6 +8,7 @@ import {
   Bell,
   LifeBuoy,
   Settings,
+  UserPlus,
   type LucideIcon,
 } from "lucide-react";
 
@@ -24,6 +25,7 @@ export const NAV_ITEMS: NavItem[] = [
   { label: "Campaigns", href: "/campaigns", icon: Tag },
   { label: "Transactions", href: "/transactions", icon: Receipt },
   { label: "Earnings & Payouts", href: "/earnings", icon: Wallet },
+  { label: "Invite & Earn", href: "/invite", icon: UserPlus },
   { label: "Notifications", href: "/notifications", icon: Bell },
   { label: "Support", href: "/support", icon: LifeBuoy },
   { label: "Account Settings", href: "/settings", icon: Settings },

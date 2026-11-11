@@ -34,7 +34,8 @@ export default function AdminTransactionsPage() {
       date: t.occurredAt,
       affiliate_code: t.affiliateCode,
       amount: t.amountTotal,
-      earning: t.earning,
+      type: t.kind === "referral" ? "referral bonus" : "sale",
+      earning: t.totalDue ?? t.earning,
       status: t.status,
     }));
     downloadFile(toCsv(rows), `cybervilla-platform-transactions-${new Date().toISOString().slice(0, 10)}.csv`);
@@ -81,7 +82,18 @@ export default function AdminTransactionsPage() {
             <tbody>
               {earnings.map((t) => (
                 <tr key={t.orderRef} className="border-b border-border last:border-0">
-                  <td className="px-4 py-3 font-medium text-foreground sm:px-5">{t.orderRef}</td><td className="px-4 py-3 text-muted">{t.occurredAt ? formatDate(t.occurredAt) : "—"}</td><td className="px-4 py-3 text-foreground">{t.affiliateCode || "Unattributed"}</td><td className="px-4 py-3 text-foreground">{formatCurrency(t.amountTotal, t.currency)}</td><td className="px-4 py-3 font-medium text-accent">{formatCurrency(t.earning, t.currency)}</td>
+                  <td className="px-4 py-3 font-medium text-foreground sm:px-5">
+                    {t.kind === "referral" ? (
+                      <>
+                        Referral bonus
+                        <span className="block text-xs font-normal text-muted">
+                          {t.orderRef.replace(/^REF-/, "")} · sale by {t.fromAffiliate ?? "a recruit"}
+                        </span>
+                      </>
+                    ) : (
+                      t.orderRef
+                    )}
+                  </td><td className="px-4 py-3 text-muted">{t.occurredAt ? formatDate(t.occurredAt) : "—"}</td><td className="px-4 py-3 text-foreground">{t.kind === "referral" ? "Invite bonus" : t.affiliateCode || "Unattributed"}</td><td className="px-4 py-3 text-foreground">{formatCurrency(t.amountTotal, t.currency)}</td><td className="px-4 py-3 font-medium text-accent">{formatCurrency(t.totalDue ?? t.earning, t.currency)}</td>
                   <td className="px-4 py-3">
                     <Badge status={t.status}>{t.status}</Badge>
                   </td>

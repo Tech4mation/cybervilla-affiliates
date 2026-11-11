@@ -36,7 +36,7 @@ export default function AdminAffiliateDetailPage() {
   if (loading) return <div className="p-8 text-center text-sm text-muted">Loading application...</div>;
   if (!data) return <div className="p-8 text-center text-sm text-danger">{actionError ?? "Affiliate not found or unavailable."}</div>;
 
-  const { affiliate, links, earnings } = data;
+  const { affiliate, links, earnings, referrals } = data;
   const detail = data;
   const isPending = affiliate.status === "pending";
 
@@ -91,6 +91,21 @@ export default function AdminAffiliateDetailPage() {
               </span>
               {affiliate.affiliateRef && <span className="text-xs text-muted">{affiliate.affiliateRef}</span>}
             </div>
+            <p className="mt-2 text-xs text-muted">
+              Invited by{" "}
+              {affiliate.invitedBy ? (
+                affiliate.invitedBy.userId ? (
+                  <Link href={`/admin/affiliates/${affiliate.invitedBy.userId}`} className="font-medium text-foreground hover:text-accent hover:underline">
+                    {affiliate.invitedBy.name}
+                  </Link>
+                ) : (
+                  <span className="font-medium text-foreground">{affiliate.invitedBy.name}</span>
+                )
+              ) : (
+                "nobody (joined directly)"
+              )}
+              {affiliate.referralCode && <> · invite code <code className="text-foreground">{affiliate.referralCode}</code></>}
+            </p>
           </div>
           {isPending && (
             <div className="flex gap-2">
@@ -109,6 +124,43 @@ export default function AdminAffiliateDetailPage() {
           <p className="text-sm text-foreground">{affiliate.whyJoin || "No application statement provided."}</p>
         </div>
       </Card>
+      {referrals && (
+        <Card>
+          <CardHeader
+            title="People they invited"
+            subtitle={`${referrals.totals.recruits} invited · ${referrals.totals.active} active · ${formatCurrency(referrals.totals.bonusEarned)} referral bonus earned`}
+          />
+          {referrals.recruits.length === 0 ? (
+            <p className="p-5 text-sm text-muted">Nobody has signed up with their code.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[560px] text-sm">
+                <thead>
+                  <tr className="border-b border-border text-left text-xs text-muted">
+                    <th className="px-4 py-3">Name</th><th className="px-4 py-3">Joined</th><th className="px-4 py-3">Status</th>
+                    <th className="px-4 py-3 text-right">Sales</th><th className="px-4 py-3 text-right">Bonus earned</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {referrals.recruits.map((r) => (
+                    <tr key={r.affiliateId ?? r.name} className="border-b border-border last:border-0">
+                      <td className="px-4 py-3">
+                        {r.userId ? (
+                          <Link href={`/admin/affiliates/${r.userId}`} className="hover:text-accent hover:underline">{r.name}</Link>
+                        ) : r.name}
+                      </td>
+                      <td className="px-4 py-3 text-muted">{r.joinedAt ? formatDate(r.joinedAt) : "—"}</td>
+                      <td className="px-4 py-3"><Badge status={r.status}>{r.status}</Badge></td>
+                      <td className="px-4 py-3 text-right tabular-nums">{r.sales}</td>
+                      <td className="px-4 py-3 text-right tabular-nums font-medium text-accent">{formatCurrency(r.bonusEarned)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Card>
+      )}
       <Card>
         <CardHeader title="Affiliate links" subtitle={`${links.length} backend records`} />
         <div className="divide-y divide-border">
@@ -118,7 +170,7 @@ export default function AdminAffiliateDetailPage() {
       </Card>
       <Card>
         <CardHeader title="Earnings" subtitle={`${earnings.length} store-reported records`} />
-        <div className="overflow-x-auto"><table className="w-full min-w-[640px] text-sm"><thead><tr className="border-b border-border text-left text-xs text-muted"><th className="px-4 py-3">Order</th><th className="px-4 py-3">Date</th><th className="px-4 py-3">Order total</th><th className="px-4 py-3">Earning</th><th className="px-4 py-3">Status</th></tr></thead><tbody>{earnings.map((earning) => <tr key={earning.orderRef} className="border-b border-border last:border-0"><td className="px-4 py-3">{earning.orderRef}</td><td className="px-4 py-3 text-muted">{earning.occurredAt ? formatDate(earning.occurredAt) : "—"}</td><td className="px-4 py-3">{formatCurrency(earning.amountTotal, earning.currency)}</td><td className="px-4 py-3 font-medium text-accent">{formatCurrency(earning.earning, earning.currency)}</td><td className="px-4 py-3"><Badge status={earning.status}>{earning.status}</Badge></td></tr>)}{!earnings.length && <tr><td colSpan={5} className="p-5 text-center text-sm text-muted">No earnings recorded.</td></tr>}</tbody></table></div>
+        <div className="overflow-x-auto"><table className="w-full min-w-[640px] text-sm"><thead><tr className="border-b border-border text-left text-xs text-muted"><th className="px-4 py-3">Order</th><th className="px-4 py-3">Date</th><th className="px-4 py-3">Order total</th><th className="px-4 py-3">Earning</th><th className="px-4 py-3">Status</th></tr></thead><tbody>{earnings.map((earning) => <tr key={earning.orderRef} className="border-b border-border last:border-0"><td className="px-4 py-3">{earning.kind === "referral" ? <>Referral bonus<span className="block text-xs text-muted">{earning.orderRef.replace(/^REF-/, "")} · sale by {earning.fromAffiliate ?? "a recruit"}</span></> : earning.orderRef}</td><td className="px-4 py-3 text-muted">{earning.occurredAt ? formatDate(earning.occurredAt) : "—"}</td><td className="px-4 py-3">{formatCurrency(earning.amountTotal, earning.currency)}</td><td className="px-4 py-3 font-medium text-accent">{formatCurrency(earning.totalDue ?? earning.earning, earning.currency)}</td><td className="px-4 py-3"><Badge status={earning.status}>{earning.status}</Badge></td></tr>)}{!earnings.length && <tr><td colSpan={5} className="p-5 text-center text-sm text-muted">No earnings recorded.</td></tr>}</tbody></table></div>
       </Card>
       <Modal open={rejecting} onClose={() => setRejecting(false)} title="Reject application">
         <textarea value={reason} onChange={(event) => setReason(event.target.value)} rows={3} className="mt-3 w-full rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm" placeholder="Reason for rejection" />

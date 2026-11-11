@@ -24,6 +24,8 @@ function toAdminAffiliate(item: Awaited<ReturnType<typeof fetchAdminAffiliates>>
     taxFormOnFile: false,
     paymentVerified: false,
     rejectionReason: item.rejectionReason ?? undefined,
+    invitedBy: item.invitedBy ?? null,
+    recruitCount: item.recruitCount ?? 0,
   };
 }
 

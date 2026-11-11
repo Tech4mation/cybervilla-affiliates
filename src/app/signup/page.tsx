@@ -1,13 +1,25 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { AlertCircle, Clock, ArrowRight } from "lucide-react";
-import { signupAffiliate, setStoredToken, ApiError } from "@/lib/api";
+import { useSearchParams } from "next/navigation";
+import { AlertCircle, Clock, ArrowRight, UserPlus } from "lucide-react";
+import { checkReferralCode, signupAffiliate, setStoredToken, ApiError } from "@/lib/api";
 import { PasswordInput } from "@/components/ui/PasswordInput";
 
+// useSearchParams needs a Suspense boundary for the page to pre-render.
 export default function SignUpPage() {
+  return (
+    <Suspense fallback={null}>
+      <SignUpForm />
+    </Suspense>
+  );
+}
+
+function SignUpForm() {
+  // An invite link is /signup?ref=<CODE>.
+  const initialRef = (useSearchParams().get("ref") ?? "").trim();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [whyJoin, setWhyJoin] = useState("");
@@ -17,10 +29,54 @@ export default function SignUpPage() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [applicantName, setApplicantName] = useState("");
+  // The invite code, if someone invited them. Checked as soon as it is known
+  // so a typo is caught here rather than silently costing the inviter.
+  const [referralCode, setReferralCode] = useState(initialRef);
+  const [inviter, setInviter] = useState<string | null>(null);
+  const [codeState, setCodeState] = useState<"idle" | "checking" | "valid" | "invalid">(
+    initialRef ? "checking" : "idle",
+  );
+
+  function applyCheck(res: { valid: boolean; code?: string; inviter?: string }) {
+    setCodeState(res.valid ? "valid" : "invalid");
+    setInviter(res.valid ? res.inviter ?? null : null);
+    if (res.valid && res.code) setReferralCode(res.code);
+    return res.valid;
+  }
+
+  async function verifyCode(raw: string): Promise<boolean> {
+    const code = raw.trim();
+    if (!code) {
+      setCodeState("idle");
+      setInviter(null);
+      return true;
+    }
+    setCodeState("checking");
+    try {
+      return applyCheck(await checkReferralCode(code));
+    } catch {
+      // The check could not run; let the server decide on submit.
+      setCodeState("idle");
+      return true;
+    }
+  }
+
+  // A code that arrived in the invite link is checked straight away, so
+  // "Invited by …" shows before they start typing.
+  useEffect(() => {
+    if (!initialRef) return;
+    checkReferralCode(initialRef)
+      .then(applyCheck)
+      .catch(() => setCodeState("idle"));
+  }, [initialRef]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    if (referralCode.trim() && codeState !== "valid" && !(await verifyCode(referralCode))) {
+      setError("That invite code isn't valid. Check it with the person who invited you, or leave it blank.");
+      return;
+    }
     setLoading(true);
 
     try {
@@ -30,6 +86,7 @@ export default function SignUpPage() {
         whyJoin,
         phone,
         password,
+        referralCode: referralCode.trim() || undefined,
       });
 
       if (res.token) {
@@ -105,6 +162,15 @@ export default function SignUpPage() {
                 </div>
               </div>
 
+              {inviter && (
+                <div className="mb-4 rounded-xl border border-success/30 bg-success/10 p-3 text-xs text-foreground flex items-center gap-2">
+                  <UserPlus size={14} className="shrink-0 text-success" />
+                  <span>
+                    Invited by <strong className="font-semibold">{inviter}</strong>
+                  </span>
+                </div>
+              )}
+
               {error && (
                 <div className="mb-4 rounded-xl border border-danger/40 bg-danger/10 p-3 text-xs text-danger flex items-center gap-2">
                   <AlertCircle size={14} className="shrink-0" />
@@ -149,6 +215,29 @@ export default function SignUpPage() {
                       placeholder="+234 800 000 0000"
                       className="w-full rounded-xl border border-border bg-surface-2 px-3.5 py-2.5 text-sm text-foreground placeholder:text-muted focus:border-accent focus:outline-none transition"
                     />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-medium text-foreground mb-1">Invite Code (Optional)</label>
+                    <input
+                      type="text"
+                      value={referralCode}
+                      onChange={(e) => {
+                        setReferralCode(e.target.value);
+                        setCodeState("idle");
+                        setInviter(null);
+                      }}
+                      onBlur={() => verifyCode(referralCode)}
+                      placeholder="e.g. INV-ADA-7K2Q"
+                      autoCapitalize="characters"
+                      className={`w-full rounded-xl border bg-surface-2 px-3.5 py-2.5 text-sm text-foreground placeholder:text-muted focus:outline-none transition ${
+                        codeState === "invalid" ? "border-danger focus:border-danger" : "border-border focus:border-accent"
+                      }`}
+                    />
+                    {codeState === "invalid" && (
+                      <p className="mt-1 text-xs text-danger">This code isn&apos;t valid.</p>
+                    )}
+                    {codeState === "checking" && <p className="mt-1 text-xs text-muted">Checking…</p>}
                   </div>
                 </div>
 

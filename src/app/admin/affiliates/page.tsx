@@ -91,6 +91,7 @@ export default function AdminAffiliatesPage() {
               <tr className="border-b border-border text-left text-xs text-muted">
                 <th className="px-4 py-3 font-medium sm:px-5">Affiliate</th>
                 <th className="px-4 py-3 font-medium">Status</th>
+                <th className="px-4 py-3 font-medium">Invited by</th>
                 <th className="px-4 py-3 font-medium">Joined</th>
                 <th className="px-4 py-3 font-medium sm:pr-5" />
               </tr>
@@ -104,6 +105,22 @@ export default function AdminAffiliatesPage() {
                   </td>
                   <td className="px-4 py-3">
                     <Badge status={a.status}>{a.status}</Badge>
+                  </td>
+                  <td className="px-4 py-3">
+                    {a.invitedBy ? (
+                      a.invitedBy.userId ? (
+                        <Link href={`/admin/affiliates/${a.invitedBy.userId}`} className="text-foreground hover:text-accent hover:underline">
+                          {a.invitedBy.name}
+                        </Link>
+                      ) : (
+                        <span className="text-foreground">{a.invitedBy.name}</span>
+                      )
+                    ) : (
+                      <span className="text-muted">—</span>
+                    )}
+                    {(a.recruitCount ?? 0) > 0 && (
+                      <p className="text-xs text-muted">Invited {a.recruitCount}</p>
+                    )}
                   </td>
                   <td className="px-4 py-3 text-muted">{a.joinedAt ? formatDate(a.joinedAt) : "—"}</td>
                   <td className="px-4 py-3 sm:pr-5">
@@ -131,7 +148,7 @@ export default function AdminAffiliatesPage() {
               ))}
               {affiliates.length === 0 && (
                 <tr>
-                  <td colSpan={4} className="px-5 py-10 text-center text-sm text-muted">
+                  <td colSpan={5} className="px-5 py-10 text-center text-sm text-muted">
                     {affiliateError
                       ? "Applications could not be loaded — see the message above."
                       : "No affiliates match your filters."}
