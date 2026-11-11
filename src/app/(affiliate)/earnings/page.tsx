@@ -123,9 +123,12 @@ export default function EarningsPage() {
           else if (e.status === "reversed") acc.reversed += due;
           else acc.completed += due;
           if (e.status !== "reversed") acc.commission += e.commission ?? 0;
+          // Referral bonuses count in the totals like any other money owed,
+          // and are reported apart below so the split is visible.
+          if (e.status !== "reversed") acc.bonus += e.bonus ?? 0;
           return acc;
         },
-        { completed: 0, paid: 0, reversed: 0, commission: 0 },
+        { completed: 0, paid: 0, reversed: 0, commission: 0, bonus: 0 },
       ),
     [earnings],
   );
@@ -173,6 +176,7 @@ export default function EarningsPage() {
         `Earned:   ${formatCurrency(breakdown.completed, currency)}`,
         `Paid out: ${formatCurrency(breakdown.paid, currency)}`,
         `Reversed: ${formatCurrency(breakdown.reversed, currency)}`,
+        `Of which referral bonus: ${formatCurrency(breakdown.bonus, currency)}`,
       ].join("\n"),
       `cybervilla-earnings-statement-${year}.txt`,
       "text/plain",
@@ -186,8 +190,9 @@ export default function EarningsPage() {
           order_ref: e.orderRef,
           date: e.occurredAt ?? "",
           currency: e.currency ?? "",
+          type: e.kind === "referral" ? `referral bonus (${e.fromAffiliate ?? "recruit"})` : "sale",
           amount_total: e.amountTotal,
-          earning: e.earning,
+          earning: e.totalDue ?? e.earning,
           status: e.status,
         })),
       ),
@@ -246,6 +251,15 @@ export default function EarningsPage() {
           </span>{" "}
           of campaign commission, earned on top of your markup. Each order&apos;s split is on the
           Transactions page.
+        </p>
+      )}
+
+      {breakdown.bonus > 0 && (
+        <p className="text-xs text-muted">
+          Includes{" "}
+          <span className="font-medium text-accent">{formatCurrency(breakdown.bonus, currency)}</span>{" "}
+          of referral bonus from sales by people you invited. See who on the{" "}
+          <a href="/invite" className="text-accent hover:underline">Invite &amp; Earn</a> page.
         </p>
       )}
 
@@ -474,10 +488,22 @@ export default function EarningsPage() {
             <tbody>
               {earnings.map((e) => (
                 <tr key={e.orderRef} className="border-b border-border last:border-0">
-                  <td className="px-4 py-3 text-foreground sm:px-5">{e.orderRef}</td>
+                  <td className="px-4 py-3 text-foreground sm:px-5">
+                    {e.kind === "referral" ? (
+                      <>
+                        <span className="font-medium">Referral bonus</span>
+                        <span className="block text-xs text-muted">
+                          from {e.fromAffiliate ?? "someone you invited"} · {e.orderRef.replace(/^REF-/, "")}
+                        </span>
+                      </>
+                    ) : (
+                      e.orderRef
+                    )}
+                  </td>
                   <td className="px-4 py-3 text-muted">{e.occurredAt ? formatDate(e.occurredAt) : "—"}</td>
                   <td className="px-4 py-3 font-medium text-foreground">{formatCurrency(e.amountTotal, e.currency)}</td>
-                  <td className="px-4 py-3 font-medium text-accent">{formatCurrency(e.earning, e.currency)}</td>
+                  {/* What is owed on the row: markup + campaign + bonus. */}
+                  <td className="px-4 py-3 font-medium text-accent">{formatCurrency(e.totalDue ?? e.earning, e.currency)}</td>
                   <td className="px-4 py-3 sm:pr-5">
                     <Badge status={e.status}>{e.status}</Badge>
                   </td>

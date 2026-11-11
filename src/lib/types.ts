@@ -97,6 +97,10 @@ export interface AdminAffiliate {
   taxFormOnFile: boolean;
   paymentVerified: boolean;
   rejectionReason?: string;
+  /** Who invited this affiliate (TPD-1876). */
+  invitedBy?: { userId: number | null; affiliateId: string | null; name: string } | null;
+  /** How many people signed up with this affiliate's invite code. */
+  recruitCount?: number;
 }
 
 export interface PlatformTransaction extends Transaction {

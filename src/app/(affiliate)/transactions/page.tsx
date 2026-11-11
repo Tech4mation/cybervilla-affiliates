@@ -39,8 +39,13 @@ export default function TransactionsPage() {
       .finally(() => setLoading(false));
   }, []);
 
+  // Referral bonuses are not the affiliate's own sales; they get their own
+  // section below so the sales table and its counts stay about sales.
+  const sales = useMemo(() => earnings.filter((t) => t.kind !== "referral"), [earnings]);
+  const bonuses = useMemo(() => earnings.filter((t) => t.kind === "referral"), [earnings]);
+
   const filtered = useMemo(() => {
-    const rows = earnings.filter((t) => {
+    const rows = sales.filter((t) => {
       const q = query.toLowerCase();
       const matchesQuery =
         t.orderRef?.toLowerCase().includes(q) ||
@@ -60,7 +65,7 @@ export default function TransactionsPage() {
       return dir * (a.earning - b.earning);
     });
     return sorted;
-  }, [earnings, query, status, source, sortKey, sortDir]);
+  }, [sales, query, status, source, sortKey, sortDir]);
 
   const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   // Filtering to fewer rows than the current page would otherwise strand the
@@ -236,6 +241,46 @@ export default function TransactionsPage() {
         </div>
         <Pagination page={safePage} pageCount={pageCount} onChange={setPage} total={filtered.length} pageSize={PAGE_SIZE} />
       </Card>
+
+      {bonuses.length > 0 && (
+        <Card>
+          <CardHeader
+            title="Referral bonuses"
+            subtitle="Earned from sales by people you invited — not your own sales."
+          />
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[560px] text-sm">
+              <thead>
+                <tr className="border-b border-border text-left text-xs text-muted">
+                  <th className="px-4 py-3 font-medium sm:px-5">From</th>
+                  <th className="px-4 py-3 font-medium">Order</th>
+                  <th className="px-4 py-3 font-medium">Date</th>
+                  <th className="px-4 py-3 font-medium">Bonus</th>
+                  <th className="px-4 py-3 font-medium sm:pr-5">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {bonuses.map((b) => (
+                  <tr key={b.orderRef} className="border-b border-border last:border-0">
+                    <td className="px-4 py-3 text-foreground sm:px-5">{b.fromAffiliate ?? "Someone you invited"}</td>
+                    <td className="px-4 py-3 text-muted">{b.orderRef.replace(/^REF-/, "")}</td>
+                    <td className="px-4 py-3 text-muted">{b.occurredAt ? formatDate(b.occurredAt) : "—"}</td>
+                    <td className="px-4 py-3 font-medium text-accent">
+                      {formatCurrency(b.bonus ?? 0, b.currency)}
+                      {b.bonusPercent != null && (
+                        <span className="ml-1 text-xs font-normal text-muted">({b.bonusPercent}%)</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 sm:pr-5">
+                      <Badge status={b.status}>{b.status}</Badge>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
     </div>
   );
 }

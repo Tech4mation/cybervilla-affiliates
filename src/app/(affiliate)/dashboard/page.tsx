@@ -48,22 +48,26 @@ export default function DashboardPage() {
   // sale and it is not money, so it stays out of every total below and is
   // reported on its own instead of quietly padding the figures.
   const active = useMemo(() => visible.filter((row) => row.status !== "reversed"), [visible]);
+  // A referral bonus is money, but not a sale: it is left out of sale counts
+  // and order values, and counted in every money figure.
+  const activeSales = useMemo(() => active.filter((row) => row.kind !== "referral"), [active]);
+  const due = (row: AffiliateEarning) => row.totalDue ?? row.earning;
   const reversed = useMemo(
-    () => visible.filter((row) => row.status === "reversed").reduce((sum, row) => sum + row.earning, 0),
+    () => visible.filter((row) => row.status === "reversed").reduce((sum, row) => sum + due(row), 0),
     [visible],
   );
   // The currency the store actually reported, rather than assuming naira.
   const currency = useMemo(() => earnings.find((row) => row.currency)?.currency ?? null, [earnings]);
   const totals = useMemo(() => ({
-    sales: active.length,
-    commissions: active.reduce((sum, row) => sum + row.earning, 0),
-    orderValue: active.length ? active.reduce((sum, row) => sum + row.amountTotal, 0) / active.length : 0,
-  }), [active]);
+    sales: activeSales.length,
+    commissions: active.reduce((sum, row) => sum + due(row), 0),
+    orderValue: activeSales.length ? activeSales.reduce((sum, row) => sum + row.amountTotal, 0) / activeSales.length : 0,
+  }), [active, activeSales]);
   // A confirmed sale is money earned. "pending" and "approved" are the old
   // words for it and may still arrive on rows recorded before the change.
   const breakdown = useMemo(() => active.reduce((result, row) => {
-    if (row.status === "paid") result.paid += row.earning;
-    else result.earned += row.earning;
+    if (row.status === "paid") result.paid += due(row);
+    else result.earned += due(row);
     return result;
   }, { earned: 0, paid: 0 }), [active]);
   const trend = useMemo(() => {
@@ -72,8 +76,8 @@ export default function DashboardPage() {
       const date = row.occurredAt?.slice(0, 10);
       if (!date) return;
       const point = points.get(date) ?? { date, sales: 0, commissions: 0 };
-      point.sales += 1;
-      point.commissions += row.earning;
+      if (row.kind !== "referral") point.sales += 1;
+      point.commissions += due(row);
       points.set(date, point);
     });
     return [...points.values()].sort((a, b) => a.date.localeCompare(b.date));
